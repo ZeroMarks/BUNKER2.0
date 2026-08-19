@@ -1,16 +1,21 @@
-# BUNKER 2.0: Your Digital Fortress (Terminal Edition)
-*Military-Grade Local Security Vault*
+
+# BUNKER 2.0: Your Digital Fortress (Terminal Edition) Price: FREE! $0 OR PAY WHAT YOU WANT! 
 
 ######## FULL SCREEN IS RECOMMENDED ########
+<img width="1005" height="632" alt="och9kko23oufm3ny21w8hakint5x" src="https://github.com/user-attachments/assets/a64ccb84-0806-4e09-9270-c1bfc997a17b" />
 
 ---
 
 ## 🛡️ About BUNKER 2.0
+*Military-Grade Local Security Vault*
 
 BUNKER 2.0 is a locally-stored, offline password and notes manager built with privacy-first principles. Using **AES-256 encryption**, your data never leaves your device and is protected by military-grade cryptographic standards.
 
+https://youtu.be/DxMICmnFs_Y - DEMO VIDEO
+https://zeromarks.gumroad.com/l/vmnbz - GUMROAD
+
 **Key Features:**
-- **AES-256 Encryption** - Industry standard military-grade security
+- **AES-256 and Argon Encryption** - Industry standard military-grade security
 - **100% Local Storage** - No cloud, no tracking, no data mining
 - **Self-Destruct Protection** - Multiple security triggers protect your vault
 - **Auto-Logout Timer** - Configurable inactivity protection
@@ -18,6 +23,8 @@ BUNKER 2.0 is a locally-stored, offline password and notes manager built with pr
 - **Encrypted Notes** - Secure storage for sensitive information
 - **IP Display Toggle** - Optional network monitoring
 - **Brute-Force Protection** - Failed attempt tracking with vault lockdown
+
+<img width="1005" height="648" alt="jl4s88eza1rti5bd10d4504bqk7n" src="https://github.com/user-attachments/assets/37696825-96c5-47f4-9b94-0b7baf19578f" />
 
 ---
 
@@ -62,13 +69,24 @@ cd ~/Desktop/BUNKER2.0
 - `pyperclip` - Secure clipboard management
 - `psutil` - System information monitoring
 - `requests` - Network utilities
+- `argon2-cliff` -  **Argon2 encryption library** NEW
 
 **Installation Command:**
 ```bash
-pip install inputimeout keyboard cryptography pyperclip psutil requests
+pip install inputimeout keyboard cryptography pyperclip psutil requests argon2-cffi
+```
+**Important:** Make sure you're in the `BUNKER2.0` directory (showing `BUNKER2.0 %`) and not the home directory (`~ %`) for successful installation.
+
+---
+
+## 🔧 Troubleshooting
+
+**Import Errors:**
+If you encounter import errors on first run, install missing packages:
+```bash
+pip install [missing_package_name]
 ```
 
-**Important:** Make sure you're in the `BUNKER2.0` directory (showing `BUNKER2.0 %`) and not the home directory (`~ %`) for successful installation.
 
 ### Step 3: Launch BUNKER 2.0
 
@@ -125,15 +143,7 @@ This application is built for **educational purposes**. Use BUNKER 2.0 at your o
 
 **Security Note:** While BUNKER 2.0 uses industry-standard AES-256 encryption, always maintain proper backup practices for critical data.
 
----
 
-## 🔧 Troubleshooting
-
-**Import Errors:**
-If you encounter import errors on first run, install missing packages:
-```bash
-pip install [missing_package_name]
-```
 
 **Other Issues:**
 If you experience different errors, please reach out through our social media channels for support.

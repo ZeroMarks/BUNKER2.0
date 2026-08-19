@@ -1,0 +1,6 @@
+# Python bytecode — regenerated on every run, never source.
+__pycache__/
+*.py[cod]
+
+# Editor-local preferences. Personal to the machine, not to the project.
+.vscode/

@@ -5,7 +5,7 @@ from cryptography.fernet import Fernet
 
 from cryptography.exceptions import InvalidTag
 from main.VAULT_FILES import integrity_status, record_integrity
-from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS
 from main.VAULT_STORE import write_bytes_atomic
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
@@ -641,7 +641,7 @@ def pwdGenerate(hashed_pass, db):
                 f"{DBLUE}Recommended password length: {GOLD}{RECOMMENDED_PASSWORD_LENGTH}{RESET} characters{RESET}"
             )
             print(
-                f"\n{GOLD}This utility generates a random password of the specified length and copies it to your clipboard for 30 secs.{RESET}"
+                f"\n{GOLD}This utility generates a random password of the specified length and copies it to your clipboard for {CLIPBOARD_CLEAR_SECONDS} secs.{RESET}"
             )
 
             while True:

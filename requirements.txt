@@ -6,3 +6,6 @@ cryptography>=44.0.1
 psutil>=5.9.0
 pyperclip>=1.8.2
 requests>=2.32.4
+# Transitive (via cffi). pycparser 3.12 requires Python 3.11+, and BUNKER
+# supports 3.10, so the lock file must not pick it.
+pycparser<3.12

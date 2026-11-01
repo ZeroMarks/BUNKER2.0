@@ -75,6 +75,12 @@ cd ~/Desktop/BUNKER2.0
 pip install -r requirements.txt
 ```
 
+**Verified install (optional):** `requirements.lock` pins the exact versions
+tested in CI with their SHA-256 hashes, so pip refuses any altered package:
+```bash
+pip install --require-hashes -r requirements.lock
+```
+
 ---
 
 ## 🔧 Troubleshooting
@@ -103,6 +109,22 @@ colours off, for example for a screen reader or a log, set `NO_COLOR`:
 
 ```bash
 NO_COLOR=1 python3 BUNKER.py
+```
+
+Screen readers read emoji aloud by name. For plain, emoji-free menus set
+`BUNKER_NO_EMOJI` as well (spacing and ASCII art are kept):
+
+```bash
+NO_COLOR=1 BUNKER_NO_EMOJI=1 python3 BUNKER.py
+```
+
+### Clipboard timeout
+
+Copied passwords and notes are cleared after 30 seconds by default. To
+change it (5-300 seconds), set `BUNKER_CLIPBOARD_SECONDS`, for example:
+
+```bash
+BUNKER_CLIPBOARD_SECONDS=10 python3 BUNKER.py
 ```
 
 ### Running the tests

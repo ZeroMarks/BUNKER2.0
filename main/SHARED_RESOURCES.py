@@ -592,7 +592,8 @@ def displayHeader(title):
 
 ###Helpers
 # Clipboard handling lives in SECURE_IO so there is one timer and one rule:
-# copied secrets are cleared after 30 seconds and when BUNKER exits.
+# copied secrets are cleared after CLIPBOARD_CLEAR_SECONDS (default 30) and
+# when BUNKER exits.
 def clear_clipboard(delay=0):
     """Clear the clipboard now if it still holds a secret BUNKER copied."""
     from main.SECURE_IO import clear_clipboard_if_ours

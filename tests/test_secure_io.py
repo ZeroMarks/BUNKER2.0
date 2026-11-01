@@ -218,6 +218,25 @@ class OpenPrivateTests(unittest.TestCase):
             self.assertEqual(os.listdir(tmp), ["bunker.salt"])
 
 
+class ClipboardSecondsSetting(unittest.TestCase):
+    def test_default_and_bounds(self):
+        with mock_env({}):
+            self.assertEqual(SECURE_IO._clipboard_seconds(), 30)
+        with mock_env({"BUNKER_CLIPBOARD_SECONDS": "10"}):
+            self.assertEqual(SECURE_IO._clipboard_seconds(), 10)
+        for bad in ("0", "4", "301", "abc", "-5", ""):
+            with mock_env({"BUNKER_CLIPBOARD_SECONDS": bad}):
+                self.assertEqual(SECURE_IO._clipboard_seconds(), 30, bad)
+
+
+def mock_env(values):
+    import os
+    from unittest import mock
+    env = {k: v for k, v in os.environ.items() if k != "BUNKER_CLIPBOARD_SECONDS"}
+    env.update(values)
+    return mock.patch.dict(os.environ, env, clear=True)
+
+
 class SignalTests(unittest.TestCase):
     def test_sigterm_clears_clipboard_before_exit(self):
         import os, signal, subprocess, sys, tempfile

@@ -45,12 +45,15 @@ a known limitation, it says so.
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.
-- **A failed action in the main menu no longer wipes the vault.** If opening
-  the password or notes manager failed, an error in the fallback reached
-  the handler that deletes the vault. BUNKER now shows the error and returns
-  to the menu.
+- **Failing to open the accounts or notes manager no longer wipes the
+  vault.** If reading the vault failed at that point, an error in the
+  fallback reached the handler that deletes the vault. BUNKER now shows the
+  error and returns to the menu. (Other unexpected errors can still delete
+  the vault; see Known limitations.)
 - **Export files are readable only by you** (permissions 0600 on macOS and
-  Linux), for both encrypted and plain-text exports.
+  Linux), for both encrypted and plain-text exports. The file is written in
+  full and then moved into place, so a failed export leaves an existing file
+  untouched, and an export never writes through a symlink.
 - **Leftover debug output removed.**
 - **Vault files are git-ignored**, so a local vault, salt or backup can't be
   committed by accident.

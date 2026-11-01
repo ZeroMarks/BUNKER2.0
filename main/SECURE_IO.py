@@ -20,6 +20,7 @@ it on the clipboard later.
 """
 
 import atexit
+import contextlib
 import hashlib
 import hmac
 import sys
@@ -73,6 +74,7 @@ def copy_secret(value, timeout=CLIPBOARD_CLEAR_SECONDS):
     """
     global _timer, _fingerprint, _generation
     with _lock:
+        previous = _fingerprint
         _cancel_timer()
         _generation += 1
         generation = _generation
@@ -83,7 +85,12 @@ def copy_secret(value, timeout=CLIPBOARD_CLEAR_SECONDS):
             copy, _ = _clipboard()
             copy(str(value))
         except Exception:
-            _fingerprint = None
+            # The previous secret's timer is already cancelled; clear it now
+            # rather than leave it on the clipboard with nothing tracking it.
+            # If that clear fails too, the fingerprint stays so exit cleanup
+            # tries again.
+            _fingerprint = previous
+            clear_clipboard_if_ours()
             return False
         timer = threading.Timer(timeout, _timer_fired, args=(generation,))
         timer.daemon = True
@@ -127,6 +134,8 @@ def clear_clipboard_if_ours():
             copy("")
             return True
         except Exception:
+            # Keep tracking it so a later attempt (e.g. at exit) can retry.
+            _fingerprint = expected
             return False
 
 
@@ -171,20 +180,31 @@ def safe_error(exc):
     return name
 
 
+@contextlib.contextmanager
 def open_private(path, encoding="utf-8"):
-    """Open ``path`` for writing, readable only by the owner (0600 on POSIX).
+    """Write ``path`` so only the owner can read it (0600 on POSIX).
 
-    Used for exports, which may hold decrypted data. Tightens the mode of an
-    existing file too, since os.open() only applies the mode on creation.
+    Used for exports, which may hold decrypted data. The data goes to a new
+    temporary file in the same folder (created exclusively, mode 0600), which
+    then replaces ``path``. This never follows a symlink at ``path``, never
+    changes another file's permissions, and leaves an existing file intact if
+    the export fails part-way.
     """
     import os
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    import tempfile
+    folder = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(prefix=".bunker-export-", suffix=".tmp", dir=folder)
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
-        return os.fdopen(fd, "w", encoding=encoding)
-    except Exception:
-        os.close(fd)
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
         raise
 
 

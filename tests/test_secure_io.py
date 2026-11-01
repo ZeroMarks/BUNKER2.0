@@ -61,6 +61,29 @@ class ClipboardTests(unittest.TestCase):
         self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
         self.assertEqual(self.cb.value, "")
 
+    def test_failed_copy_clears_previous_secret(self):
+        SECURE_IO.copy_secret("A-secret", timeout=60)
+        def broken(text):
+            if text:
+                raise RuntimeError("clipboard busy")
+            self.cb.value = text
+        SECURE_IO.set_clipboard_backend(broken, self.cb.paste)
+        self.assertFalse(SECURE_IO.copy_secret("B-secret"))
+        self.assertEqual(self.cb.value, "")
+        self.assertFalse(SECURE_IO.has_pending_secret())
+
+    def test_clipboard_outage_keeps_old_secret_tracked_for_exit(self):
+        SECURE_IO.copy_secret("A-secret", timeout=60)
+        good_copy = self.cb.copy
+        def down(_text):
+            raise RuntimeError("clipboard unavailable")
+        SECURE_IO.set_clipboard_backend(down, self.cb.paste)
+        self.assertFalse(SECURE_IO.copy_secret("B-secret"))
+        self.assertTrue(SECURE_IO.has_pending_secret())
+        SECURE_IO.set_clipboard_backend(good_copy, self.cb.paste)
+        self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
+        self.assertEqual(self.cb.value, "")
+
     def test_copy_failure_returns_false_without_raising(self):
         def broken(_):
             raise RuntimeError("hunter2!")
@@ -145,6 +168,38 @@ class OpenPrivateTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
             with open(path) as f:
                 self.assertEqual(f.read(), "{}")
+
+    def test_symlink_is_replaced_not_followed(self):
+        import os, tempfile
+        if os.name == "nt":
+            self.skipTest("POSIX symlinks only")
+        with tempfile.TemporaryDirectory() as tmp:
+            victim = os.path.join(tmp, "victim")
+            with open(victim, "w") as f:
+                f.write("keep me")
+            os.chmod(victim, 0o644)
+            link = os.path.join(tmp, "export.json")
+            os.symlink(victim, link)
+            with SECURE_IO.open_private(link) as f:
+                f.write("{}")
+            with open(victim) as f:
+                self.assertEqual(f.read(), "keep me")
+            self.assertFalse(os.path.islink(link))
+            self.assertEqual(os.stat(victim).st_mode & 0o777, 0o644)
+
+    def test_failed_export_leaves_existing_file_and_no_temp(self):
+        import os, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "export.json")
+            with open(path, "w") as f:
+                f.write("previous export")
+            with self.assertRaises(RuntimeError):
+                with SECURE_IO.open_private(path) as f:
+                    f.write("partial")
+                    raise RuntimeError("boom")
+            with open(path) as f:
+                self.assertEqual(f.read(), "previous export")
+            self.assertEqual(os.listdir(tmp), ["export.json"])
 
 
 class SignalTests(unittest.TestCase):

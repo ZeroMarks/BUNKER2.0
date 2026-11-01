@@ -79,8 +79,12 @@ a known limitation, it says so.
   attempt counter.
 - **Safer file writes.** The salt, config, settings and key files are
   written atomically and owner-only, so a crash mid-write can't leave a
-  truncated file that would lock you out. (Atomic writes for the vault
-  database itself are in a follow-up change.)
+  truncated file that would lock you out. The vault database is written
+  the same way, so a crash during a save leaves the previous version intact.
+- **Mobile saves to the same vault as desktop.** The mobile interface used
+  an incompatible format and its save function did not exist, so nothing
+  was ever saved. It now reads and writes `Bunker.mmf` in the desktop
+  format; you can switch interfaces without losing data.
 - **Export files are readable only by you** (permissions 0600 on macOS and
   Linux), for both encrypted and plain-text exports. The file is written in
   full and then moved into place, so a failed export leaves an existing file
@@ -132,8 +136,6 @@ protection stops.
   you have a specific reason not to.
 - **The failed-login limit deletes the vault on purpose.** BUNKER cannot
   recover it. Keep an encrypted export as a backup.
-- **The mobile interface can view but not yet save changes** in this
-  release; that is fixed in a follow-up change.
 - **Deleting `config.cfg` resets the failed-attempt counter.** Someone who
   can change files in the BUNKER folder can do that (they could also just
   delete the vault).

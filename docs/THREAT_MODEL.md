@@ -47,7 +47,7 @@ concern for AES-GCM.
 | A5 | Other **local user accounts** on the same machine | Yes | Vault, salt, settings and export files are written owner-only (0600) on macOS/Linux. |
 | A6 | **Shoulder surfing / screen recording** | Partly | Password input is hidden unless you choose to show it; secrets are revealed only on request. The password-strength checker shows what you type. |
 | A7 | **Malware running as you**, or root/admin | No | It can read memory, log keystrokes and read your files. No local password manager can defend against this. |
-| A8 | **Crashes, power loss, damaged files, bugs** | Yes | Salt, config, settings, key and export files are written atomically (the vault database itself in a follow-up change). `bunker.chk` records hashes of the salt and config, so damaged or mismatched files are reported instead of being counted as wrong passwords. Errors, Ctrl+C, EOF and timeouts never delete the vault; only 3 wrong passwords on verified files do. Real-crypto tests cover these cases. |
+| A8 | **Crashes, power loss, damaged files, bugs** | Yes | The vault database, salt, config, settings, key and export files are written atomically. `bunker.chk` records hashes of the salt and config, so damaged or mismatched files are reported instead of being counted as wrong passwords. Errors, Ctrl+C, EOF and timeouts never delete the vault; only 3 wrong passwords on verified files do. Real-crypto tests cover these cases. |
 
 ## 5. Design rules the code enforces
 
@@ -67,8 +67,8 @@ concern for AES-GCM.
   (or an earlier setup was interrupted), and asks every question before
   writing. Changing the master password re-encrypts every field and swaps
   all files together, keeping the old ones until every write succeeded.
-- **Atomic, private writes** (0600 temp file, fsync, rename) for the salt,
-  settings, key and export files.
+- **Atomic, private writes** (0600 temp file, fsync, rename, directory
+  fsync) for the vault database, salt, config, settings, key and export files.
 - **Vault data never leaves the machine.** BUNKER's only network use is
   looking up your public IP: with the IP display turned on (ipify, and a
   connectivity check to 8.8.8.8), and on the System info screen (ipify,

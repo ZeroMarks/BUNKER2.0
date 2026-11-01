@@ -226,6 +226,15 @@ def _atomic_private(path, mode, encoding=None):
         except OSError:
             pass
         raise
+    # Make the rename itself durable (best effort; not possible on Windows).
+    try:
+        dfd = os.open(folder, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError:
+        pass
 
 
 def open_private(path, encoding="utf-8"):

@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet
 from cryptography.exceptions import InvalidTag
 from main.VAULT_FILES import integrity_status, record_integrity
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS
+from main.VAULT_STORE import write_bytes_atomic
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
@@ -1380,8 +1381,7 @@ def addProfile(hashed_pass, db):
                     "favorite": profile_data.get('favorite', False),
                 }
                 encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                with open("Bunker.mmf", "wb") as f:
-                    f.write(encrypted_db)
+                write_bytes_atomic("Bunker.mmf", encrypted_db)
                 clear_screen()
                 displayHeader(f"{CYAN}✏️  ADD PROFILE{RESET}")
                 print(f"{GREEN}** SUCCESS: Profile successfully created! **{RESET}")
@@ -1810,8 +1810,7 @@ def editProfileData(hashed_pass, db):
 
                 # Save encrypted database with enhanced security
                 encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                with open("Bunker.mmf", "wb") as f:
-                    f.write(encrypted_db)
+                write_bytes_atomic("Bunker.mmf", encrypted_db)
                 
                 clear_screen()
                 displayHeader(f"{CYAN}🖍️  EDIT A PROFILE{RESET}")
@@ -2010,8 +2009,7 @@ def deleteProfileData(hashed_pass, db):
             # Save changes to the database with enhanced security
             try:
                 encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                with open("Bunker.mmf", "wb") as f:
-                    f.write(encrypted_db)
+                write_bytes_atomic("Bunker.mmf", encrypted_db)
             except Exception as e:
                 print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
 
@@ -2634,8 +2632,7 @@ def main_note_manager(hashed_pass, contents):
                     if not timedOut:
                         try:
                             encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            with open("Bunker.mmf", "wb") as f:
-                                f.write(encrypted_db)
+                            write_bytes_atomic("Bunker.mmf", encrypted_db)
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
@@ -2651,8 +2648,7 @@ def main_note_manager(hashed_pass, contents):
                     if not timedOut:
                         try:
                             encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            with open("Bunker.mmf", "wb") as f:
-                                f.write(encrypted_db)
+                            write_bytes_atomic("Bunker.mmf", encrypted_db)
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
@@ -2674,8 +2670,7 @@ def main_note_manager(hashed_pass, contents):
                     if not timedOut:
                         try:
                             encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            with open("Bunker.mmf", "wb") as f:
-                                f.write(encrypted_db)
+                            write_bytes_atomic("Bunker.mmf", encrypted_db)
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
@@ -2816,8 +2811,7 @@ def addNote(hashed_pass, db):
                     "private": is_private
                 }
                 encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                with open("Bunker.mmf", "wb") as f:
-                    f.write(encrypted_db)
+                write_bytes_atomic("Bunker.mmf", encrypted_db)
                 clear_screen()
                 displayHeader(f"{CYAN}📝 ADD A NOTE{RESET}")
                 print(f"{GREEN}** SUCCESS: Note successfully created! **{RESET}")
@@ -3271,8 +3265,7 @@ def editNoteData(hashed_pass, db):
                     encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
                     
                     # Write directly as bytes to ensure consistent format
-                    with open("Bunker.mmf", "wb") as f:
-                        f.write(encrypted_db)
+                    write_bytes_atomic("Bunker.mmf", encrypted_db)
 
                     # Success message
                     clear_screen()
@@ -4646,8 +4639,7 @@ def importProfiles(hashed_pass, db):
                 continue
 
         encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-        with open("Bunker.mmf", "wb") as f:
-            f.write(encrypted_db)
+        write_bytes_atomic("Bunker.mmf", encrypted_db)
 
         print(f"\n{GREEN}** SUCCESS: Import completed **{RESET}")
         print(f"{GOLD}Profiles imported: {imported_count}{RESET}")
@@ -5066,8 +5058,7 @@ def deleteNoteData(hashed_pass, db):
             try:
                 # Use enhanced security for encryption and save as binary
                 encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                with open("Bunker.mmf", "wb") as f:
-                    f.write(encrypted_db)
+                write_bytes_atomic("Bunker.mmf", encrypted_db)
             except Exception as e:
                 print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
             

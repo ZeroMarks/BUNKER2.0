@@ -171,6 +171,23 @@ def safe_error(exc):
     return name
 
 
+def open_private(path, encoding="utf-8"):
+    """Open ``path`` for writing, readable only by the owner (0600 on POSIX).
+
+    Used for exports, which may hold decrypted data. Tightens the mode of an
+    existing file too, since os.open() only applies the mode on creation.
+    """
+    import os
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        return os.fdopen(fd, "w", encoding=encoding)
+    except Exception:
+        os.close(fd)
+        raise
+
+
 def install_exit_signal_handlers():
     """Clear the clipboard when the terminal is closed or the process is told
     to stop (SIGHUP/SIGTERM), which otherwise kill BUNKER without cleanup.

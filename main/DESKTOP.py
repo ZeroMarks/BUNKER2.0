@@ -4,7 +4,7 @@ import keyboard as kb
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
-from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
@@ -361,8 +361,14 @@ def manage_passwords_and_notes(hashed_pass):
                         latest_contents = f.read()
                     timedOut = main_pwd_manager(hashed_pass, latest_contents)
                 except Exception as e:
-                    print(f"{RED}** ALERT: Failed to read latest database: {safe_error(e)} **{RESET}")
-                    timedOut = main_pwd_manager(hashed_pass, contents)
+                    # The old fallback re-ran the manager with `contents`,
+                    # which is unset on the first pick; the NameError reached
+                    # the outer handler, which wipes the vault. Report the
+                    # error (read failure or a bug in the manager) and return
+                    # to the menu instead.
+                    print(f"{RED}** ALERT: Could not complete that action ({safe_error(e)}). Returning to the menu. **{RESET}")
+                    time.sleep(2)
+                    continue
 
             elif user_cmd == "s":
                 # Get the latest database before passing to manager
@@ -371,8 +377,14 @@ def manage_passwords_and_notes(hashed_pass):
                         latest_contents = f.read()
                     timedOut = main_note_manager(hashed_pass, latest_contents)
                 except Exception as e:
-                    print(f"{RED}** ALERT: Failed to read latest database: {safe_error(e)} **{RESET}")
-                    timedOut = main_note_manager(hashed_pass, contents)
+                    # The old fallback re-ran the manager with `contents`,
+                    # which is unset on the first pick; the NameError reached
+                    # the outer handler, which wipes the vault. Report the
+                    # error (read failure or a bug in the manager) and return
+                    # to the menu instead.
+                    print(f"{RED}** ALERT: Could not complete that action ({safe_error(e)}). Returning to the menu. **{RESET}")
+                    time.sleep(2)
+                    continue
 
             elif user_cmd == "d":
                 timedOut = changeDisplayIp(hashed_pass, disable_ipv4)
@@ -652,7 +664,7 @@ def pwdGenerate(hashed_pass, db):
                     # Display and copy to clipboard
                     clear_screen()
                     displayHeader(f"🪄 {CYAN}GENERATE RANDOM PASSWORD{RESET}")
-                    reveal_secret(f"Generated Password: ", f"{password}\n")
+                    reveal_secret("Generated Password: ", password)
                     print(to_clipboard(password))
 
                     # Ask user to continue or return
@@ -3756,7 +3768,7 @@ def exportNotes(hashed_pass, db):
         }
 
         if not export_encrypted:
-            with open(file_name, "w", encoding="utf-8") as out_file:
+            with open_private(file_name) as out_file:
                 json.dump(file_structure, out_file, indent=4, ensure_ascii=False)
         else:
             file_json_bytes = json.dumps(file_structure).encode("utf-8")
@@ -3767,7 +3779,7 @@ def exportNotes(hashed_pass, db):
                 "verifier": base64.b64encode(verifier).decode("utf-8"),
                 "data": base64.b64encode(encrypted_output).decode("utf-8"),
             }
-            with open(file_name, "w", encoding="utf-8") as out_file:
+            with open_private(file_name) as out_file:
                 json.dump(exported_encrypted_object, out_file, indent=4, ensure_ascii=False)
 
         print(f"\n{GREEN}===== EXPORT SUMMARY ====={RESET}")
@@ -3783,7 +3795,7 @@ def exportNotes(hashed_pass, db):
             print(f"{RED}╠══════════════════════════════════════════════════════╣{RESET}")
             print(f"{RED}║We have generated a passphrase:                       ║{RESET}")
             print(f"{RED}║                                                      ║{RESET}")
-            print(f"{RED}║{CYAN}  {generated_passphrase:<52}{RED}║{RESET}")
+            reveal_secret(f"{RED}║{CYAN}  ", f"{generated_passphrase:<52}{RED}║{RESET}")
             print(f"{RED}║                                                      ║{RESET}")
             print(f"{RED}║ ** IMPORTANT: Store this passphrase securely! **     ║{RESET}")
             print(f"{RED}║ You will need it to decrypt and import notes.        ║{RESET}")
@@ -4348,13 +4360,13 @@ def exportProfiles(hashed_pass, db):
                     structure_json = json.dumps(file_structure)
                     encrypted_data = vault.encrypt_data(structure_json.encode(), export_key)
                     encrypted_export["data"] = base64.b64encode(encrypted_data).decode("utf-8")
-                    with open(file_name, "w", encoding="utf-8") as file:
+                    with open_private(file_name) as file:
                         json.dump(encrypted_export, file, indent=4, ensure_ascii=False)
                 except Exception as e:
                     print(f"{RED} ** ALERT: Failed to encrypt data. Error: {safe_error(e)} **{RESET}")
                     return False
             else:
-                with open(file_name, "w", encoding="utf-8") as file:
+                with open_private(file_name) as file:
                     json.dump(file_structure, file, indent=4, ensure_ascii=False)
 
     
@@ -4376,7 +4388,7 @@ def exportProfiles(hashed_pass, db):
                 print(f"{RED}╠══════════════════════════════════════════════════════╣{RESET}")
                 print(f"{RED}║We have generated a passphrase:                       ║{RESET}")
                 print(f"{RED}║                                                      ║{RESET}")
-                print(f"{RED}║{CYAN}  {generated_passphrase:<52}{RED}║{RESET}")
+                reveal_secret(f"{RED}║{CYAN}  ", f"{generated_passphrase:<52}{RED}║{RESET}")
                 print(f"{RED}║                                                      ║{RESET}")
                 print(f"{RED}║ ** IMPORTANT: Store this passphrase securely! **     ║{RESET}")
                 print(f"{RED}║ You will need it to decrypt and import profiles.     ║{RESET}")

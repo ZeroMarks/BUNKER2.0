@@ -130,6 +130,23 @@ class OutputTests(unittest.TestCase):
             SECURE_IO.clear_clipboard_if_ours()
             SECURE_IO.set_clipboard_backend(None, None)
 
+class OpenPrivateTests(unittest.TestCase):
+    def test_export_file_is_owner_only(self):
+        import os, stat, tempfile
+        if os.name == "nt":
+            self.skipTest("POSIX permissions only")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "export.json")
+            with open(path, "w") as f:      # pre-existing, default mode
+                f.write("old")
+            os.chmod(path, 0o644)
+            with SECURE_IO.open_private(path) as f:
+                f.write("{}")
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            with open(path) as f:
+                self.assertEqual(f.read(), "{}")
+
+
 class SignalTests(unittest.TestCase):
     def test_sigterm_clears_clipboard_before_exit(self):
         import os, signal, subprocess, sys, tempfile

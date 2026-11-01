@@ -29,11 +29,29 @@ No login attempt was counted.
    login. Until then, wrong passwords are counted but never destroy
    anything.
 
-## "bunker.salt or bunker.cfg is missing"
+## "Unexpected error (FileNotFoundError ...)" followed by "What to do next: docs/RECOVERY.md"
 
+This is what BUNKER shows when `bunker.salt` or `bunker.cfg` is missing.
 Both are needed to open the vault; without the salt the key cannot be
 derived. Restore them from the same backup as `Bunker.mmf`. There is no
 way to rebuild them.
+
+## "UI config file missing or corrupted. Error: InvalidTag"
+
+`config.cfg` (your settings and the failed-attempt counter) could not be
+read. It is locked with a key that depends on `bunker.salt`, so this appears
+if `config.cfg` is damaged **or if `bunker.salt` was changed or damaged**.
+Nothing is deleted when you see it.
+
+1. Put back the `bunker.salt` and `config.cfg` that belong to your vault
+   (the same backup as `Bunker.mmf`), then try again.
+2. If `bunker.salt` is intact and only `config.cfg` is damaged, delete
+   `config.cfg`. BUNKER creates a new one with the default settings. The
+   failed-attempt counter and auto-logout timer go back to their defaults;
+   the vault itself is unaffected.
+3. If `bunker.salt` itself is damaged and you have no copy, the vault cannot
+   be opened, because without the salt there is no key. Restore from an
+   encrypted export (see the last section).
 
 ## "The password is correct but the vault files are inconsistent"
 

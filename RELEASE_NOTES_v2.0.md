@@ -112,8 +112,11 @@ a known limitation, it says so.
 - **Leftover debug output removed.**
 - **Unused dependencies removed.** `keyboard` (a global keyboard hook) and
   `inputimeout` were imported but never used.
-- **Vault files are git-ignored**, so a local vault, salt or backup can't be
-  committed by accident.
+- **Vault files are git-ignored**, so a local vault, salt, backup, settings
+  file or integrity record can't be committed by accident. A copy of
+  `config.cfg` that had been committed made the mobile interface stop at
+  "UI config file missing or corrupted" on a fresh download, before it could
+  offer first-run setup; the file is no longer part of the repository.
 
 ## Requirements
 
@@ -166,6 +169,13 @@ protection stops.
 - **Killing BUNKER with `kill -9`** (or a crash of Python itself) skips all
   cleanup, so a password copied less than 30 seconds earlier stays on the
   clipboard.
+- **Copying to the clipboard on Linux needs a clipboard tool.** Install
+  `xclip`, `xsel` or `wl-clipboard` (Wayland). Without one, BUNKER says
+  "Could not access the clipboard" and nothing is copied or shown; you can
+  still view a password on screen when you choose to.
+- **Terminal width decides the suggested interface.** BUNKER guesses
+  mobile for terminals up to 80 columns and tablet up to 120, and asks you
+  to confirm. Answer **n** and choose Desktop/Laptop if the guess is wrong.
 - **Security reports:** email support@zeromarks.net instead of opening a
   public issue.
 - BUNKER is provided as-is, for educational purposes, with no warranty.

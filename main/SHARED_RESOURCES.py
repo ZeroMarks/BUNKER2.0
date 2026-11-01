@@ -474,6 +474,7 @@ def safe_exit(message, code=1):
     """
     print(f"{RED}** ALERT: {message} **{RESET}")
     print(f"{CYAN}BUNKER closed. Your vault files were not changed.{RESET}")
+    print(f"{CYAN}What to do next: docs/RECOVERY.md{RESET}")
     try:
         from main.SHARED_RESOURCES_MOBILE import secure_cleanup_common
         secure_cleanup_common()

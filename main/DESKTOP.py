@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
 from cryptography.exceptions import InvalidTag
+from main.VAULT_FILES import integrity_status, record_integrity
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
@@ -133,6 +134,15 @@ def main(device_type='desktop'):
                 )
         print(f"{GOLD}Security clearance required! {RESET}")
 
+        # Can a failed password even be told apart from damaged files?
+        files_state = integrity_status()
+        if files_state == "missing":
+            safe_exit("bunker.salt or bunker.cfg is missing, so the vault cannot be opened")
+        if files_state == "mismatch":
+            safe_exit("The vault files are damaged or out of step with each other "
+                      "(bunker.salt / bunker.cfg). No login attempt was counted. "
+                      "If *.prev copies exist, they are the previous files")
+
         # Password verification loop
         hashed_pass = False
         timedOut = False
@@ -202,11 +212,14 @@ def main(device_type='desktop'):
                 cSALT = base64.b64decode(config["salt"])
                 cVERIFIER = base64.b64decode(config["verifier"])
                 
-                # Extra verification step
+                # bunker.cfg decrypted, so the password is right (AES-GCM is
+                # authenticated). A verifier failure now means the files are
+                # inconsistent, not a wrong password: never count it.
                 if vault.verify_password_enhanced(entered_pass, cSALT, cVERIFIER):
                     login_successful = True
                 else:
-                    print(f"{RED} ** ALERT: Password verification failed. Try again. **{RESET}")
+                    safe_exit("The password is correct but the vault files are inconsistent. "
+                              "No login attempt was counted")
                     
             except InvalidTag:
                 # Wrong key: the only failure that counts as a failed attempt.
@@ -229,6 +242,9 @@ def main(device_type='desktop'):
                 #with open("bunker.cfg", "wb") as f:
                 #    f.write(encrypted_config)
                 
+                if files_state == "unknown":
+                    # Vault from before integrity records: start one now.
+                    record_integrity()
                 hashed_pass = derived_key
                 break
             else:
@@ -257,7 +273,12 @@ def main(device_type='desktop'):
                 # Check if max attempts reached
                 if attempts >= max_attempts:
                     print(f"{CYAN} ** ALERT: Maximum attempts reached. Exiting... Unauthorized access system locked. **{RESET}")
-                    self_destruct()
+                    if files_state == "ok":
+                        # Files verified intact, so these really were wrong
+                        # passwords: the one deliberate trigger.
+                        self_destruct()
+                    safe_exit("Maximum attempts reached. The vault files could not be "
+                              "verified, so they were left untouched")
                 
                 
 

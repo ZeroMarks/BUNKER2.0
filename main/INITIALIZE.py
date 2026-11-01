@@ -387,10 +387,9 @@ class SecureVaultEnhanced:
             # Encrypt the config dict as JSON using the provided key
             json_bytes = json.dumps(config_data).encode()
             encrypted = self.encrypt_data(json_bytes, hashed_pass)
-            with open(self.config_file, "wb") as f:
-                f.write(encrypted)
-            if os.name == 'posix':
-                os.chmod(self.config_file, 0o600)
+            # Atomic, owner-only, and keeps bunker.chk in step (VAULT_FILES)
+            from main.VAULT_FILES import write_config
+            write_config(encrypted)
         except Exception as e:
             raise ValueError(f"Failed to save config: {safe_error(e)}")
 
@@ -403,25 +402,13 @@ class SecureVaultEnhanced:
             decrypted = self.decrypt_data(encrypted, hashed_pass)
             return json.loads(decrypted.decode())
         except FileNotFoundError:
-            return self.create_default_config(key=hashed_pass)
+            # Used to write a fresh config with a random salt and an empty
+            # verifier here, which made the vault impossible to open on the
+            # next login. A missing bunker.cfg is an error to report.
+            raise ValueError("bunker.cfg is missing")
         except Exception as e:
             raise ValueError(f"Failed to load config: {safe_error(e)}")
 
-    def create_default_config(self, key):
-        """Create default configuration with all necessary values"""
-        config = {
-            "salt": base64.b64encode(os.urandom(SALT_SIZE)).decode(),
-            "verifier": "",
-            #temp
-            #"timeout_value": 60,
-            #"max_attempts": 3,
-            #"settings": {"disable_ipv4": True},
-            #"attempts": 0,
-            "last_exit": str(datetime.datetime.now().timestamp()),
-            "timestamp": str(time.time())
-        }
-        self.save_config(config, key)
-        return config
         
 
 timeoutGlobalCode = "*TIMEOUT*"

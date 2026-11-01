@@ -238,3 +238,31 @@ Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `1321
 - **Quality bar:** best in the world. Research what the leading tools and
   standards do, walk every user flow end to end, verify with tests and real
   runs, and only claim what has been verified.
+
+## 10. Release-readiness walk (2026-11-01, Pacific time)
+
+Walked a fresh copy in a real terminal (pty) on Linux: first run, add, read,
+copy and auto-clear (checked with xclip), encrypted export, delete, import,
+notes, change master password, wrong password, damaged and missing files,
+System info. All worked. On `mobile/shared-vault` the mobile first run was
+also walked. Not walked: a real phone or Termux, macOS, Windows by hand.
+
+Found and fixed (commits on top of `hardening/v2.0`, unpushed):
+- `config.cfg` was tracked. Fresh clone + mobile (the suggestion at 80
+  columns) stopped at "UI config file missing or corrupted" before setup.
+  Now untracked and ignored with `bunker.chk` and `*.prev`.
+- `docs/RECOVERY.md` now quotes the messages BUNKER actually prints.
+- Release notes: new known limitations (Linux clipboard tool, interface
+  guess by terminal width).
+- `docs/RELEASE_CHECKLIST.md` lists the steps to tag v2.0.
+
+Open gaps (not fixed, in rough order):
+1. A damaged `bunker.salt` shows "UI config file ... InvalidTag" with no
+   pointer to RECOVERY.md (`main/SHARED_RESOURCES_MOBILE.py` `load_ui_config`).
+2. First run on a fresh folder prints "Bunker.mmf was DESTROYED or not
+   found", which alarms new users (`main/DESKTOP.py`, `main/MOBILE.py`).
+3. Menus say "Version: BETA" (`main/DESKTOP.py:371,1157,2577`).
+4. Terminals up to 120 columns are guessed to be mobile or tablet.
+5. Deleting profiles has no confirmation after choosing "delete all".
+6. Changing the master password does not ask for the current one while
+   logged in (design choice to confirm).

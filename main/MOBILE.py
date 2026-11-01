@@ -143,10 +143,13 @@ def main(device_type='mobile'):
         print(f"{RED}Failed to load salt. Cannot proceed.{RESET}")
         return
 
-    # Handle login process
+    # Handle login process (shared, persistent attempt counter)
+    from main.INITIALIZE import vault as login_vault
+    from main.VAULT_FILES import try_password
     vault_ui = VaultUI(device_type)
-    attempts = 0
-    max_attempts = 3
+    ui_config = load_ui_config()
+    attempts = ui_config.get("attempts", 0)
+    max_attempts = ui_config.get("max_attempts", 3)
     vault_key = None
 
     while attempts < max_attempts:
@@ -197,19 +200,37 @@ def main(device_type='mobile'):
                 master_pass = timeoutInput(f"{GOLD}Enter the bunker access code to proceed: {RESET}", timeout=current_timeout)
             else:  # user_cmd == "n"
                 master_pass = timeout_getpass(f"{GOLD}Enter the bunker access code to proceed: {RESET}", current_timeout)
-                
-            if not master_pass:
-                attempts += 1
-                continue
-                
-            # Use shared key derivation method
-            vault_key = vault.derive_key_hybrid(master_pass, salt, master_pass)  # Using password as pepper like desktop
-            break
-            
         except Exception as e:
-            vault_ui.ui.error_message(f"Login failed: {safe_error(e)}")
-            attempts += 1
-    
+            # EOF, timeout or input error: not a password attempt.
+            vault_ui.ui.error_message(f"Login cancelled: {safe_error(e)}")
+            return
+        if not master_pass or master_pass == timeoutGlobalCode:
+            return  # nothing entered: not an attempt
+
+        # Same rules as the desktop login (VAULT_FILES.try_password): only a
+        # wrong password counts, damaged files never do, and the counter is
+        # the shared one, so switching interface does not reset it. Mobile
+        # never destroys anything itself.
+        try:
+            status, key = try_password(master_pass, login_vault)
+        except Exception as e:
+            vault_ui.ui.error_message(f"Could not check the password: {safe_error(e)}")
+            return
+        if status == "ok":
+            ui_config["attempts"] = 0
+            save_ui_config(ui_config)
+            vault_key = key
+            break
+        if status != "wrong":
+            vault_ui.ui.error_message(
+                "The vault files are missing, damaged or out of step. "
+                "No login attempt was counted.")
+            return
+        ui_config["attempts"] = ui_config.get("attempts", 0) + 1
+        save_ui_config(ui_config)
+        attempts = ui_config["attempts"]
+        vault_ui.ui.error_message("Incorrect access password.")
+
     if not vault_key:
         vault_ui.ui.error_message("Maximum login attempts exceeded")
         return
@@ -219,10 +240,11 @@ def main(device_type='mobile'):
         with open("Bunker.mmf", "rb") as f:
             encrypted_contents = f.read()
         contents = json.loads(
-            vault.decrypt_data(encrypted_contents, vault_key).decode()
+            login_vault.decrypt_data(encrypted_contents, vault_key).decode()
         )
-    except FileNotFoundError:
-        contents = {"profiles": [], "notes": [], "accounts": []}
+    except Exception as e:
+        vault_ui.ui.error_message(f"Could not open the vault: {safe_error(e)}")
+        return
 
     # Initialize the UI with detected device type
     vault_ui = VaultUI(device_type)

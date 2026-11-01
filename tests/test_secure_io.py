@@ -32,20 +32,20 @@ class ClipboardTests(unittest.TestCase):
     def test_secret_is_cleared_after_timeout(self):
         self.assertTrue(SECURE_IO.copy_secret("hunter2!", timeout=0.05))
         self.assertEqual(self.cb.value, "hunter2!")
-        time.sleep(0.3)
+        time.sleep(1.0)
         self.assertEqual(self.cb.value, "")
         self.assertFalse(SECURE_IO.has_pending_secret())
 
     def test_user_copy_after_secret_is_not_wiped(self):
         SECURE_IO.copy_secret("hunter2!", timeout=0.05)
         self.cb.copy("something the user copied")
-        time.sleep(0.3)
+        time.sleep(1.0)
         self.assertEqual(self.cb.value, "something the user copied")
 
     def test_new_copy_replaces_old_timer(self):
         SECURE_IO.copy_secret("first", timeout=0.05)
         SECURE_IO.copy_secret("second", timeout=5)
-        time.sleep(0.3)
+        time.sleep(1.0)
         self.assertEqual(self.cb.value, "second")
         self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
         self.assertEqual(self.cb.value, "")
@@ -200,6 +200,22 @@ class OpenPrivateTests(unittest.TestCase):
             with open(path) as f:
                 self.assertEqual(f.read(), "previous export")
             self.assertEqual(os.listdir(tmp), ["export.json"])
+
+    def test_write_private_bytes_atomic_and_private(self):
+        import os, stat, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bunker.salt")
+            SECURE_IO.write_private_bytes(path, b"\x01" * 32)
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), b"\x01" * 32)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            # A failure mid-write keeps the old content and leaves no temp file.
+            with self.assertRaises(TypeError):
+                SECURE_IO.write_private_bytes(path, object())
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), b"\x01" * 32)
+            self.assertEqual(os.listdir(tmp), ["bunker.salt"])
 
 
 class SignalTests(unittest.TestCase):

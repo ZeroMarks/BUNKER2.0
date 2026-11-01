@@ -1,6 +1,5 @@
 import base64, json, subprocess, platform, psutil, socket, datetime, \
 base64, uuid, traceback, sys, string, secrets, pyperclip, os, time, importlib.util
-import keyboard as kb
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
@@ -1979,7 +1978,8 @@ def deleteProfileData(hashed_pass, db):
                 print(
                     f"{GOLD}\nSelected profile{'s' if len(decrypted_deleted_domains) > 1 else ''} deleted:{RESET}"
                 )
-                print(f"{f'{GOLD},\n{LPURPLE}'.join(decrypted_deleted_domains)}")
+                separator = f"{GOLD},\n{LPURPLE}"  # kept outside the f-string for Python < 3.12
+                print(separator.join(decrypted_deleted_domains))
                 
             # Save changes to the database with enhanced security
             try:

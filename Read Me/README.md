@@ -64,19 +64,16 @@ cd ~/Desktop/BUNKER2.0
 ### Step 2: Install Required Packages
 
 **Required Dependencies:**
-- `inputimeout` - Timeout handling for secure input
-- `keyboard` - Keyboard input handling
 - `cryptography` - **AES-256 encryption library**
 - `pyperclip` - Secure clipboard management
 - `psutil` - System information monitoring
 - `requests` - Network utilities
 - `argon2-cffi` - **Argon2 key derivation library** NEW
 
-**Installation Command:**
+**Installation Command** (run it inside the `BUNKER2.0` folder):
 ```bash
-pip install inputimeout keyboard cryptography pyperclip psutil requests argon2-cffi
+pip install -r requirements.txt
 ```
-**Important:** Make sure you're in the `BUNKER2.0` directory (showing `BUNKER2.0 %`) and not the home directory (`~ %`) for successful installation.
 
 ---
 
@@ -98,6 +95,15 @@ python3 BUNKER.py
 On first run BUNKER walks you through creating a new vault and master password (at least 8 characters). After that you'll reach the BUNKER ACCESS page each time you launch.
 
 **Your vault files** live in the folder you run BUNKER from: `Bunker.mmf` (encrypted vault), `bunker.salt` and `bunker.cfg`. You need all of them to open the vault. They are git-ignored so you can't commit them by accident.
+
+### Plain output (no colours)
+
+BUNKER follows the [NO_COLOR](https://no-color.org) convention. To turn
+colours off, for example for a screen reader or a log, set `NO_COLOR`:
+
+```bash
+NO_COLOR=1 python3 BUNKER.py
+```
 
 ### Running the tests
 

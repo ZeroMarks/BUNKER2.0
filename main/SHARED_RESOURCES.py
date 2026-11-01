@@ -21,6 +21,10 @@ VINTAGE = "\033[31m"  # Vintage Red dark red ograngeish
 LPURPLE = "\033[94m"  # light putple
 PURPLE = "\033[95m"  #
 CYAN = "\033[96m"  #
+# Accessibility: honour the NO_COLOR convention (https://no-color.org).
+# If NO_COLOR is set to any non-empty value, print without ANSI colours.
+if os.environ.get("NO_COLOR"):
+    L_CYAN = BUNKER = DBLUE = FORANGE = FBLUE = FRED = GOLD = GREEN = RED = RESET = DPURPLE = MUSTARD = VINTAGE = LPURPLE = PURPLE = CYAN = ""
 
 #ART
 

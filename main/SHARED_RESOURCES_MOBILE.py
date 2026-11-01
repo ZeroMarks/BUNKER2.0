@@ -1,5 +1,5 @@
 import os, platform
-from main.SECURE_IO import safe_error
+from main.SECURE_IO import safe_error, write_private_bytes
 from main.VAULT_STORE import write_bytes_atomic
 import importlib.util
 import time
@@ -23,6 +23,10 @@ VINTAGE = "\033[31m"  # Vintage Red dark red ograngeish
 LPURPLE = "\033[94m"  # light putple
 PURPLE = "\033[95m"  #
 CYAN = "\033[96m"  #
+# Accessibility: honour the NO_COLOR convention (https://no-color.org).
+# If NO_COLOR is set to any non-empty value, print without ANSI colours.
+if os.environ.get("NO_COLOR"):
+    L_CYAN = BUNKER = DBLUE = FORANGE = FBLUE = FRED = GOLD = GREEN = RED = RESET = DPURPLE = MUSTARD = VINTAGE = LPURPLE = PURPLE = CYAN = ""
 
 class ModernUI:
     """Minimal UI elements needed for device detection"""
@@ -334,9 +338,8 @@ class SecureVaultEnhanced:
 vault = SecureVaultEnhanced()
 
 def save_salt(salt, filename="bunker.salt"):
-    """Save salt to file"""
-    with open(filename, "wb") as f:
-        f.write(salt)
+    """Save salt to file (atomic, owner-only)"""
+    write_private_bytes(filename, salt)
 
 def load_salt(filename="bunker.salt"):
     """Load salt from file"""
@@ -441,17 +444,8 @@ def save_ui_config(config):
         data = json.dumps(config).encode("utf-8")
         encrypted = vault.encrypt_data(data, key)
         
-        # Write to temporary file first
-        temp_file = "config.cfg.tmp"
-        with open(temp_file, "wb") as f:
-            f.write(encrypted)
-            
-        # Set secure permissions
-        if os.name == 'posix':
-            os.chmod(temp_file, 0o600)
-            
-        # Atomic replace
-        os.replace(temp_file, "config.cfg")
+        # Atomic, owner-only write (temp file + fsync + replace)
+        write_private_bytes("config.cfg", encrypted)
         
     except Exception as e:
         print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
@@ -503,17 +497,8 @@ def save_ui_config(config):
         data = json.dumps(config).encode("utf-8")
         encrypted = vault.encrypt_data(data, key)
         
-        # Write to temporary file first
-        temp_file = "config.cfg.tmp"
-        with open(temp_file, "wb") as f:
-            f.write(encrypted)
-            
-        # Set proper permissions
-        if os.name == 'posix':
-            os.chmod(temp_file, 0o600)
-            
-        # Atomic replace
-        os.replace(temp_file, "config.cfg")
+        # Atomic, owner-only write (temp file + fsync + replace)
+        write_private_bytes("config.cfg", encrypted)
         
     except Exception as e:
         print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
@@ -792,9 +777,11 @@ def vaultSetup():
             salt = os.urandom(SALT_SIZE)
             save_salt(salt)
 
-            # Derive key using password + salt (+ optional pepper)
-            pepper = os.environ.get("BUNKER_PEPPER", "")
-            derived_key = vault.derive_key_hybrid(password_provided, salt, password_provided)
+            # Derive the key exactly as the desktop login does (Argon2id +
+            # PBKDF2, INITIALIZE.vault). Imported here, not at module load,
+            # because INITIALIZE imports this module.
+            from main.INITIALIZE import vault as login_vault
+            derived_key = login_vault.derive_key_hybrid(password_provided, salt, password_provided)
             
             # Setup timeout
             timeout_value = setup_timeout()
@@ -813,18 +800,23 @@ def vaultSetup():
             # Save UI config with mobile-compatible encryption
             save_ui_config(ui_config)
 
-            # Create verifier
-            verifier = vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)
+            # bunker.cfg holds the salt and the password verifier; login
+            # reads it first. It was not written after the desktop/mobile
+            # split, so a new vault could never be opened.
+            config = {
+                "salt": base64.b64encode(salt).decode(),
+                "verifier": base64.b64encode(
+                    login_vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)).decode(),
+                "last_exit": str(datetime.datetime.now().timestamp()),
+                "timestamp": str(time.time()),
+            }
+            write_private_bytes(
+                "bunker.cfg",
+                login_vault.encrypt_data(json.dumps(config).encode(), derived_key))
 
-            # Initialize empty database
-            empty_db = {}
-            
-            # Save empty database
-            encrypted_db = vault.encrypt_data(json.dumps(empty_db).encode(), derived_key)
-            write_bytes_atomic("Bunker.mmf", encrypted_db)
-
-            if os.name == 'posix':
-                os.chmod("Bunker.mmf", 0o600)
+            # Empty database, written last so a half-finished setup is redone
+            encrypted_db = login_vault.encrypt_data(json.dumps({}).encode(), derived_key)
+            write_private_bytes("Bunker.mmf", encrypted_db)
 
             clear_screen()
 

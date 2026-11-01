@@ -120,11 +120,21 @@ def _text(entry, name, required=True, nonblank=False):
     value = entry[name]
     if not isinstance(value, str):
         raise ValueError(f"'{name}' must be text")
+    _check_encodable(value, name)
     if nonblank and not value.strip():
         raise ValueError(f"'{name}' is empty")
     if not required and not value.strip():
         return "N/A"
     return value
+
+
+def _check_encodable(value, name):
+    # JSON allows lone surrogates (e.g. "\ud800"), which can't be encrypted
+    # or printed; refuse the entry rather than abort the whole import.
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError(f"'{name}' is not valid text") from None
 
 
 def _clean_tags(tags, private):
@@ -151,6 +161,8 @@ def validate_notes(structure):
                 tags = ["N/A"]
             if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
                 raise ValueError("'tags' must be a list of text")
+            for t in tags:
+                _check_encodable(t, "tags")
         except ValueError as e:
             problems.append((number, str(e)))
             continue
@@ -214,7 +226,8 @@ def existing_notes(db, decrypt_field, decrypt_tag):
             private = bool(entry.get("private", False))
             tags = [decrypt_tag(t) for t in entry.get("tags", []) or []]
             out.append({"title": decrypt_field("title", entry), "content": decrypt_field("content", entry),
-                        "private": private, "tags": _clean_tags(tags, private)})
+                        "private": private, "tags": _clean_tags(tags, private),
+                        "favorite": entry.get("favorite") is True})
         except Exception:
             continue
     return out
@@ -232,45 +245,53 @@ def existing_profiles(db, decrypt_field):
         for f in ("email", "username"):
             if not fields[f].strip():
                 fields[f] = "N/A"
+        fields["favorite"] = entry.get("favorite") is True
         out.append(fields)
     return out
 
 
+def _starred(entries, key_fn):
+    return {key_fn(e): bool(e.get("favorite", False)) for e in entries}
+
+
 def plan_notes(candidates, existing):
-    """Return (new notes, number skipped as exact duplicates)."""
-    seen = {note_key(n) for n in existing}
-    new, duplicates = [], 0
+    """Return (new notes, exact duplicates skipped, how many of those differ
+    from the vault's copy only in the favourite star; the vault's star is kept)."""
+    seen = _starred(existing, note_key)
+    new, duplicates, star_only = [], 0, 0
     for note in candidates:
         key = note_key(note)
         if key in seen:
             duplicates += 1
+            star_only += seen[key] != note["favorite"]
             continue
-        seen.add(key)
+        seen[key] = note["favorite"]
         new.append(note)
-    return new, duplicates
+    return new, duplicates, star_only
 
 
 def plan_profiles(candidates, existing):
-    """Return (new profiles, exact duplicates skipped, how many of the new
-    ones share a site and login with an existing profile)."""
-    seen = {profile_key(p) for p in existing}
-    logins = {login_key(p) for p in existing}
-    new, duplicates, same_login = [], 0, 0
+    """Return (new profiles, exact duplicates skipped, duplicates that differ
+    only in the favourite star, and how many new ones share a site and login
+    with a profile already in the vault)."""
+    seen = _starred(existing, profile_key)
+    vault_logins = {login_key(p) for p in existing}
+    new, duplicates, star_only, same_login = [], 0, 0, 0
     for profile in candidates:
         key = profile_key(profile)
         if key in seen:
             duplicates += 1
+            star_only += seen[key] != profile["favorite"]
             continue
-        if login_key(profile) in logins:
-            same_login += 1
-        seen.add(key)
-        logins.add(login_key(profile))
+        same_login += login_key(profile) in vault_logins
+        seen[key] = profile["favorite"]
         new.append(profile)
-    return new, duplicates, same_login
+    return new, duplicates, star_only, same_login
 
 
 # ---------------------------------------------------------------- display
 def has_controls(text):
+    """True if the text holds terminal control characters or bidi overrides."""
     return any(_is_control(ch) for ch in text)
 
 
@@ -278,19 +299,26 @@ def _is_control(ch):
     return ch in _BIDI_CONTROLS or unicodedata.category(ch) == "Cc"
 
 
+def _is_hidden(ch):
+    # Invisible format characters (zero-width space, BOM, joiners) and line or
+    # paragraph separators can make one name look like another.
+    return unicodedata.category(ch) in ("Cf", "Zl", "Zp")
+
+
 def printable(text, limit=None):
     """Make untrusted text safe to print on one line.
 
-    Control characters (C0, DEL, C1, including ESC and CSI) and bidirectional
-    overrides are shown as visible escapes such as \\x1b instead of being sent
-    to the terminal, so they can't move the cursor, hide text, or set the
-    clipboard. Newlines and tabs become spaces.
+    Control characters (C0, DEL, C1, including ESC and CSI), bidirectional
+    overrides and invisible format characters are shown as visible escapes
+    such as \\x1b or \\u200b instead of being sent to the terminal, so they
+    can't move the cursor, hide text, set the clipboard, or make two names
+    look alike. Newlines and tabs become spaces.
     """
     out = []
     for ch in str(text):
         if ch in "\n\t\r":
             out.append(" ")
-        elif _is_control(ch):
+        elif _is_control(ch) or _is_hidden(ch):
             code = ord(ch)
             out.append(f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}")
         else:

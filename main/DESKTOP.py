@@ -3934,11 +3934,17 @@ def _ask_yes_no(prompt):
         print(f"{RED} ** ALERT: Please enter 'y' for yes, 'n' for no, or '.c' to cancel. **{RESET}")
 
 
-def _report_import_plan(kind, new_count, duplicates, problems, control_count):
-    """Print what an import will do before the user confirms it."""
-    print(f"{GOLD}{new_count} new {kind} to import.{RESET}")
+def _report_duplicates(duplicates, star_only):
     if duplicates:
         print(f"{GOLD}{duplicates} already in your vault (or repeated in the file): skipped, nothing is overwritten.{RESET}")
+    if star_only:
+        print(f"{GOLD}{star_only} of those differ only in the favourite star; your vault's setting is kept.{RESET}")
+
+
+def _report_import_plan(kind, new_count, duplicates, star_only, problems, control_count):
+    """Print what an import will do before the user confirms it."""
+    print(f"{GOLD}{new_count} new {kind} to import.{RESET}")
+    _report_duplicates(duplicates, star_only)
     if problems:
         print(f"{RED}{len(problems)} could not be read and will be skipped:{RESET}")
         for number, reason in problems[:10]:
@@ -3957,8 +3963,7 @@ def _finish_import(db, new_entries, hashed_pass, kind):
         updated[str(uuid.uuid4())] = entry
     if not saveDatabase(updated, hashed_pass):
         print(f"{RED}** ALERT: The vault could not be saved. Nothing was imported. **{RESET}")
-        timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
-        return False
+        return timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}") == timeoutGlobalCode
     db.clear()
     db.update(updated)
     print(f"\n{GREEN}** SUCCESS: Import completed. **{RESET}")
@@ -3967,7 +3972,8 @@ def _finish_import(db, new_entries, hashed_pass, kind):
     return userContinue == timeoutGlobalCode
 
 
-def _nothing_new(kind, duplicates, problems):
+def _nothing_new(kind, duplicates, star_only, problems):
+    _report_duplicates(0, star_only)
     if duplicates and not problems:
         print(f"{GOLD}** Nothing to import: all {duplicates} {kind} in this file are already in your vault. **{RESET}")
     elif duplicates or problems:
@@ -4005,9 +4011,9 @@ def importNotes(hashed_pass, db):
 
         existing = existing_notes(db, lambda f, e: decode_and_decrypt(f, e, hashed_pass),
                                   lambda t: decode_and_decrypt_tag(t, hashed_pass))
-        new_notes, duplicates = plan_notes(candidates, existing)
+        new_notes, duplicates, star_only = plan_notes(candidates, existing)
         if not new_notes:
-            return _nothing_new("notes", duplicates, problems)
+            return _nothing_new("notes", duplicates, star_only, problems)
 
         print(f"{CYAN}Notes to be imported:{RESET}\n")
         control_count = 0
@@ -4024,7 +4030,7 @@ def importNotes(hashed_pass, db):
                 print(f"{L_CYAN}Title: {RESET}{printable(note['title'], 80)} {DBLUE}| Preview: {RESET}{printable(preview, 80)}\n")
             if any(has_controls(s) for s in (note["title"], note["content"], *note["tags"])):
                 control_count += 1
-        _report_import_plan("notes", len(new_notes), duplicates, problems, control_count)
+        _report_import_plan("notes", len(new_notes), duplicates, star_only, problems, control_count)
 
         confirm = _ask_yes_no(f"{GOLD}Do you want to import these notes? (y/n) (.c to cancel): {RESET}")
         if confirm == timeoutGlobalCode:
@@ -4464,9 +4470,9 @@ def importProfiles(hashed_pass, db):
             return False
 
         existing = existing_profiles(db, lambda f, e: decode_and_decrypt(f, e, hashed_pass))
-        new_profiles, duplicates, same_login = plan_profiles(candidates, existing)
+        new_profiles, duplicates, star_only, same_login = plan_profiles(candidates, existing)
         if not new_profiles:
-            return _nothing_new("profiles", duplicates, problems)
+            return _nothing_new("profiles", duplicates, star_only, problems)
 
         show = _ask_yes_no(f"{GOLD}Do you want to display passwords? (y/n): {RESET}")
         if show == timeoutGlobalCode:
@@ -4488,7 +4494,7 @@ def importProfiles(hashed_pass, db):
                 print(f"{L_CYAN}Password: {RESET}{mask()}\n")
             if any(has_controls(profile[f]) for f in ("domain", "email", "username", "password")):
                 control_count += 1
-        _report_import_plan("profiles", len(new_profiles), duplicates, problems, control_count)
+        _report_import_plan("profiles", len(new_profiles), duplicates, star_only, problems, control_count)
         if same_login:
             print(f"{GOLD}{same_login} have the same site and login as a profile you already have, but a different password. "
                   f"They will be added next to it, so you can compare and delete the old one.{RESET}")

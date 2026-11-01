@@ -1196,13 +1196,10 @@ def saveDatabase(db, hashed_pass):
     try:
         db_bytes = json.dumps(db).encode('utf-8')
         encrypted_db = vault.encrypt_data(db_bytes, hashed_pass)
-        with open("Bunker.mmf", "wb") as f:
-            f.write(encrypted_db)
-        if os.name == 'posix':
-            os.chmod("Bunker.mmf", 0o600)
-        file_size = os.path.getsize("Bunker.mmf")
-        if file_size < 100 and len(db) > 0:
-            raise ValueError(f"Database file too small ({file_size} bytes)")
+        if len(encrypted_db) < 100 and len(db) > 0:
+            raise ValueError(f"Database file too small ({len(encrypted_db)} bytes)")
+        # Atomic and owner-only: a crash or failed write leaves the old vault.
+        write_private_bytes("Bunker.mmf", encrypted_db)
         # Only update config if it loads successfully
         try:
             vault.manage_config(

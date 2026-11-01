@@ -87,8 +87,9 @@ concern for AES-GCM.
 7. **Optional pepper.** `BUNKER_PEPPER` falls back to a fixed public default,
    so in practice it adds nothing unless set. Changing it would make existing
    vaults unreadable, so it is left as is.
-8. **The `keyboard` package** is a dependency; on Linux it may need elevated
-   permissions to work.
+8. **Dependencies.** BUNKER relies on `cryptography`, `argon2-cffi`,
+   `pyperclip`, `psutil` and `requests` (see `requirements.txt`); a flaw in
+   one of them affects BUNKER. CI runs `pip-audit` against known advisories.
 
 ## 7. Verifying these claims
 

@@ -260,3 +260,40 @@ class FreshVaultFlows(VaultTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FuzzLoginFiles(VaultTestCase):
+    """Damage the files that unlock the vault in random ways, then log in
+    with the correct password: nothing may ever be destroyed or counted,
+    and the vault database must stay byte-identical."""
+
+    ROUNDS = 6  # per file; each login runs the real (slow) key derivation
+
+    def test_damaged_unlock_files_never_destroy_or_count(self):
+        import random
+        from tests.test_fuzz_vault_input import mutate
+        self.assertTrue(run_setup())
+        pristine = self.snapshot()
+        # Control: the harness really logs in when nothing is damaged.
+        self.assertEqual(desktop_login([PASSWORD]), (False, True))
+        for n, data in pristine.items():
+            Path(n).write_bytes(data)
+        rng = random.Random(4242)
+        outcomes = {}
+        for name in ("bunker.cfg", "bunker.salt", "bunker.chk", "config.cfg"):
+            for _ in range(self.ROUNDS):
+                for n, data in pristine.items():
+                    Path(n).write_bytes(data)
+                Path(name).write_bytes(mutate(rng, pristine[name]))
+                damaged = self.snapshot()
+                destroyed, menu = desktop_login([PASSWORD])
+                self.assertFalse(destroyed, f"destroyed after damaging {name}")
+                outcomes.setdefault(name, []).append(menu)
+                after = self.snapshot()
+                self.assertEqual(after["Bunker.mmf"], pristine["Bunker.mmf"], name)
+                for n in ("bunker.salt", "bunker.cfg"):
+                    self.assertEqual(after.get(n), damaged.get(n), f"{n} rewritten ({name})")
+        # Damage to salt/config/record must always stop the login; damaged
+        # UI settings may or may not, but never destroy anything.
+        for name in ("bunker.cfg", "bunker.salt"):
+            self.assertNotIn(True, outcomes[name], f"login succeeded with damaged {name}")

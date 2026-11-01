@@ -111,6 +111,13 @@ colours off, for example for a screen reader or a log, set `NO_COLOR`:
 NO_COLOR=1 python3 BUNKER.py
 ```
 
+Screen readers read emoji aloud by name. For plain, emoji-free menus set
+`BUNKER_NO_EMOJI` as well (spacing and ASCII art are kept):
+
+```bash
+NO_COLOR=1 BUNKER_NO_EMOJI=1 python3 BUNKER.py
+```
+
 ### Clipboard timeout
 
 Copied passwords and notes are cleared after 30 seconds by default. To

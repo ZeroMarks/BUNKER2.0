@@ -21,6 +21,7 @@ from SHARED_RESOURCES_MOBILE import (
     clear_screen, ModernUI, detect_device
 )
 from main.SECURE_IO import install_exit_signal_handlers, safe_error
+from main.TERMINAL import setup_output
 
 def load_interface_module(module_name):
     """Safely load a Python module by name"""
@@ -42,6 +43,9 @@ def main():
         # Clear any copied secret if the terminal is closed or BUNKER is
         # told to stop (SIGHUP/SIGTERM skip the normal cleanup otherwise).
         install_exit_signal_handlers()
+        # Never crash on characters the terminal cannot show; optional
+        # emoji-free output for screen readers (BUNKER_NO_EMOJI=1).
+        setup_output()
 
         # First detect device type and set up UI preference
         clear_screen()

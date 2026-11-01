@@ -27,7 +27,18 @@ import os
 import sys
 import threading
 
-CLIPBOARD_CLEAR_SECONDS = 30
+def _clipboard_seconds(default=30, low=5, high=300):
+    """Clipboard clear delay. Set BUNKER_CLIPBOARD_SECONDS to change it
+    (5-300 s); anything else falls back to the default."""
+    raw = os.environ.get("BUNKER_CLIPBOARD_SECONDS", "")
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if low <= value <= high else default
+
+
+CLIPBOARD_CLEAR_SECONDS = _clipboard_seconds()
 MASK = "********"
 
 # Always import this module as ``main.SECURE_IO`` so the process has one

@@ -105,6 +105,15 @@ colours off, for example for a screen reader or a log, set `NO_COLOR`:
 NO_COLOR=1 python3 BUNKER.py
 ```
 
+### Clipboard timeout
+
+Copied passwords and notes are cleared after 30 seconds by default. To
+change it (5-300 seconds), set `BUNKER_CLIPBOARD_SECONDS`, for example:
+
+```bash
+BUNKER_CLIPBOARD_SECONDS=10 python3 BUNKER.py
+```
+
 ### Running the tests
 
 ```bash

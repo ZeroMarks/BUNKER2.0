@@ -28,6 +28,8 @@ a known limitation, it says so.
   passwords, the vault files are overwritten and deleted, and BUNKER cannot
   recover them. (On SSDs and copy-on-write file systems old blocks may
   survive; see the threat model.)
+- **Configurable clipboard timeout.** `BUNKER_CLIPBOARD_SECONDS` (5-300,
+  default 30) sets how long copied secrets stay on the clipboard.
 - **Plain output option.** Set `NO_COLOR=1` to run without colours
   ([NO_COLOR](https://no-color.org) convention), useful with screen readers
   and when logging.

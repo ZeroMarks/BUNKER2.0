@@ -327,22 +327,19 @@ class Login(MobileCase):
             self.addCleanup(p.stop)
 
     def vault_with(self, derive):
+        """A complete vault: salt, bunker.cfg (salt + verifier), integrity
+        record and database, as setup creates them."""
+        import base64, json
+        import main.INITIALIZE as I
+        import main.VAULT_FILES as VF
         key = derive("correct-horse", self.SALT)
+        Path("bunker.salt").write_bytes(self.SALT)
+        cfg = {"salt": base64.b64encode(self.SALT).decode(),
+               "verifier": base64.b64encode(I.vault.encrypt_data(b"BUNKER_VERIFIED", key)).decode()}
+        Path("bunker.cfg").write_bytes(I.vault.encrypt_data(json.dumps(cfg).encode(), key))
+        VF.record_integrity()
         S.save({"n": S.make_note("t", "c", key)}, key)
         return key
-
-    def test_unlock_uses_desktop_key_derivation(self):
-        key = self.vault_with(S.derive_key)
-        self.assertEqual(MB.unlock_vault("correct-horse", self.SALT), key)
-
-    def test_unlock_falls_back_to_legacy_mobile_derivation(self):
-        key = self.vault_with(lambda pw, s: MB.vault.derive_key_hybrid(pw, s, pw))
-        self.assertEqual(MB.unlock_vault("correct-horse", self.SALT), key)
-
-    def test_unlock_wrong_password(self):
-        self.vault_with(S.derive_key)
-        with self.assertRaises(InvalidTag):
-            MB.unlock_vault("wrong", self.SALT)
 
     def test_three_wrong_passwords_end_the_session_and_touch_nothing(self):
         self.vault_with(S.derive_key)

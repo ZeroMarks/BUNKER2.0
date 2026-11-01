@@ -388,10 +388,9 @@ class SecureVaultEnhanced:
             # Encrypt the config dict as JSON using the provided key
             json_bytes = json.dumps(config_data).encode()
             encrypted = self.encrypt_data(json_bytes, hashed_pass)
-            with open(self.config_file, "wb") as f:
-                f.write(encrypted)
-            if os.name == 'posix':
-                os.chmod(self.config_file, 0o600)
+            # Atomic, owner-only, and keeps bunker.chk in step (VAULT_FILES)
+            from main.VAULT_FILES import write_config
+            write_config(encrypted)
         except Exception as e:
             raise ValueError(f"Failed to save config: {safe_error(e)}")
 
@@ -404,25 +403,13 @@ class SecureVaultEnhanced:
             decrypted = self.decrypt_data(encrypted, hashed_pass)
             return json.loads(decrypted.decode())
         except FileNotFoundError:
-            return self.create_default_config(key=hashed_pass)
+            # Used to write a fresh config with a random salt and an empty
+            # verifier here, which made the vault impossible to open on the
+            # next login. A missing bunker.cfg is an error to report.
+            raise ValueError("bunker.cfg is missing")
         except Exception as e:
             raise ValueError(f"Failed to load config: {safe_error(e)}")
 
-    def create_default_config(self, key):
-        """Create default configuration with all necessary values"""
-        config = {
-            "salt": base64.b64encode(os.urandom(SALT_SIZE)).decode(),
-            "verifier": "",
-            #temp
-            #"timeout_value": 60,
-            #"max_attempts": 3,
-            #"settings": {"disable_ipv4": True},
-            #"attempts": 0,
-            "last_exit": str(datetime.datetime.now().timestamp()),
-            "timestamp": str(time.time())
-        }
-        self.save_config(config, key)
-        return config
         
 
 timeoutGlobalCode = "*TIMEOUT*"
@@ -1788,7 +1775,7 @@ def changeMasterPassword(hashed_pass, db):
 
             try:
                 # Derive key and check if it matches existing password
-                derived_key = vault.derive_key_hybrid(password_provided, current_salt)
+                derived_key = vault.derive_key_hybrid(password_provided, current_salt, password_provided)
                 if derived_key == hashed_pass:
                     print(f"{RED}\n ** ALERT: New password cannot be the same as the current password. **{RESET}")
                     while True:
@@ -1827,26 +1814,32 @@ def changeMasterPassword(hashed_pass, db):
                 config["last_exit"] = str(datetime.datetime.now().timestamp())
                 config["timestamp"] = str(time.time())
 
-                
-                # Save new salt
-                save_salt(new_salt)
-
-                # Encrypt and save config with new key
+                # Every field is encrypted on its own, so each one must be
+                # re-encrypted under the new key. (Before, only the outer file
+                # was, which left every password and note unreadable.) Work
+                # from the vault on disk and prepare everything in memory;
+                # nothing is written if any step fails.
+                from main.VAULT_FILES import rekey_database, replace_vault
+                current_db = loadDatabase(hashed_pass)
+                new_db = rekey_database(current_db, hashed_pass, new_derived_key, vault)
+                encrypted_db = vault.encrypt_data(json.dumps(new_db).encode(), new_derived_key)
                 encrypted_config = vault.encrypt_data(json.dumps(config).encode(), new_derived_key)
-                with open("bunker.cfg", "wb") as f:
-                    f.write(encrypted_config)
+                # Prove the new files open with the new key before writing.
+                if json.loads(vault.decrypt_data(encrypted_db, new_derived_key)) != new_db:
+                    raise ValueError("re-encrypted vault did not verify")
 
-                # Update and save UI config
                 ui_config = {
                     "attempts": 0,
-                    "max_attempts": config.get("max_attempts", 3),
-                    "disable_ipv4": config.get("settings", {}).get("disable_ipv4", True),
-                    "current_timeout": config.get("timeout_value", 60)
+                    "max_attempts": ui_config.get("max_attempts", 3),
+                    "disable_ipv4": ui_config.get("disable_ipv4", True),
+                    "current_timeout": ui_config.get("current_timeout", 60),
                 }
-                save_ui_config(ui_config)
-
-                # Save database with new key if needed
-                saveDatabase(db, new_derived_key)
+                # Database, config and salt are replaced together, with the
+                # old files kept until all succeed (VAULT_FILES.replace_vault).
+                # UI settings are re-saved right after the salt: their key
+                # depends on it.
+                replace_vault(new_salt, encrypted_config, encrypted_db,
+                              after_salt=lambda: save_ui_config(ui_config))
 
                 print(f"{GREEN}\n ** SUCCESS: Master password changed successfully! Log in again to access the note manager. **{RESET}")
                 timeoutInput(f"\n{GOLD}Press 'enter' to logout...{RESET}")

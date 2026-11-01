@@ -48,13 +48,15 @@ class PolicyIsStructural(unittest.TestCase):
         fname, node, parents = calls[0]
         self.assertEqual(fname, "DESKTOP.py")
         self.assertEqual(getattr(node.func, "id", None), "self_destruct")
-        guard, p = None, parents.get(node)
+        guards, p = [], parents.get(node)
         while p is not None:
             if isinstance(p, ast.If):
-                guard = ast.unparse(p.test)
-                break
+                guards.append(ast.unparse(p.test))
             p = parents.get(p)
-        self.assertEqual(guard, "attempts >= max_attempts")
+        # Must sit inside BOTH: the limit is reached AND the vault files were
+        # verified intact (so the failures really were wrong passwords).
+        self.assertIn("attempts >= max_attempts", guards)
+        self.assertIn("files_state == 'ok'", guards)
 
 
 class LoginFlowNeverWipesOnErrors(unittest.TestCase):
@@ -157,11 +159,22 @@ class LoginFlowNeverWipesOnErrors(unittest.TestCase):
     def test_failed_login_limit_still_self_destructs(self):
         """The one deliberate trigger: wrong master password max_attempts times."""
         with mock.patch("builtins.input", return_value="n"), \
+             mock.patch.object(D, "integrity_status", return_value="ok"), \
              mock.patch.object(D, "timeout_getpass", return_value="wrong"), \
              mock.patch.object(D.vault, "decrypt_data", side_effect=InvalidTag()):
             self._run()
         self.assertEqual(self.saved_attempts, [1, 2, 3])
         self.assertEqual(self.wiped, [True])
+
+    def test_limit_with_unverified_files_does_not_destroy(self):
+        """Without an integrity record the failures may be file damage."""
+        with mock.patch("builtins.input", return_value="n"), \
+             mock.patch.object(D, "integrity_status", return_value="unknown"), \
+             mock.patch.object(D, "timeout_getpass", return_value="wrong"), \
+             mock.patch.object(D.vault, "decrypt_data", side_effect=InvalidTag()):
+            self._run()
+        self.assertEqual(self.saved_attempts, [1, 2, 3])
+        self.assertVaultUntouched()
 
 
 class LoadDatabaseNeverWipes(unittest.TestCase):

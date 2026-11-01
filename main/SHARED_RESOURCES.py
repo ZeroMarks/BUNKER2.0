@@ -488,13 +488,15 @@ def self_destruct():
     Securely deletes all sensitive files with multiple overwrite passes."""
     # Updated list of sensitive files
     sensitive_files = [
-        "Bunker.mmf", 
-        "bunker.cfg", 
-        "bunker.salt",     
-        "config.cfg",   
-        ".vault_config",   
-        "*.bak.*"         
-
+        "Bunker.mmf",
+        "bunker.cfg",
+        "bunker.salt",
+        "config.cfg",
+        "bunker.chk",
+        ".vault_config",
+        "*.bak.*",        # overwrite_db backups (patterns are expanded below)
+        "*.prev",         # copies kept during a master password change
+        ".bunker-*.tmp",  # leftovers from an interrupted atomic write
     ]
     
     print(f"{GOLD}Self-destruct initiated. Searching for sensitive files...{RESET}")
@@ -510,8 +512,15 @@ def self_destruct():
                 os.path.join("config", file_name) if os.path.exists("config") else None
             ]
             
-            # Filter out None values
-            paths_to_check = [p for p in paths_to_check if p]
+            # Filter out None values; expand patterns; never follow symlinks
+            # (overwriting through one would damage a file elsewhere).
+            import glob
+            expanded = []
+            for p in paths_to_check:
+                if not p:
+                    continue
+                expanded.extend(glob.glob(p) if any(c in p for c in "*?[") else [p])
+            paths_to_check = [p for p in expanded if not os.path.islink(p)]
             
             for path in paths_to_check:
                 if os.path.exists(path):

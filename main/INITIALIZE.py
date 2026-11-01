@@ -11,7 +11,6 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
 from argon2.low_level import hash_secret_raw, Type
 from queue import Queue
-from inputimeout import inputimeout, TimeoutOccurred
 from cryptography.fernet import Fernet
 
 # Import other necessary functions

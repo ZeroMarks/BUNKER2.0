@@ -55,16 +55,21 @@ a known limitation, it says so.
   full and then moved into place, so a failed export leaves an existing file
   untouched, and an export never writes through a symlink.
 - **Leftover debug output removed.**
+- **Unused dependencies removed.** `keyboard` (a global keyboard hook) and
+  `inputimeout` were imported but never used.
 - **Vault files are git-ignored**, so a local vault, salt or backup can't be
   committed by accident.
 
 ## Requirements
 
-Python 3 and these packages:
+Python 3 and the packages in `requirements.txt`:
 
 ```bash
-pip install inputimeout keyboard cryptography pyperclip psutil requests argon2-cffi
+pip install -r requirements.txt
 ```
+
+The unused `keyboard` and `inputimeout` packages are no longer needed. On
+Linux, `keyboard` could require root.
 
 ## Tests
 

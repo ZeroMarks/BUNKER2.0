@@ -1,6 +1,5 @@
 import base64, json, subprocess, platform, psutil, socket, datetime, \
 base64, uuid, traceback, sys, string, secrets, pyperclip, os, time, importlib.util
-import keyboard as kb
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 

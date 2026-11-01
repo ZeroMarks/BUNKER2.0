@@ -64,19 +64,16 @@ cd ~/Desktop/BUNKER2.0
 ### Step 2: Install Required Packages
 
 **Required Dependencies:**
-- `inputimeout` - Timeout handling for secure input
-- `keyboard` - Keyboard input handling
 - `cryptography` - **AES-256 encryption library**
 - `pyperclip` - Secure clipboard management
 - `psutil` - System information monitoring
 - `requests` - Network utilities
 - `argon2-cffi` - **Argon2 key derivation library** NEW
 
-**Installation Command:**
+**Installation Command** (run it inside the `BUNKER2.0` folder):
 ```bash
-pip install inputimeout keyboard cryptography pyperclip psutil requests argon2-cffi
+pip install -r requirements.txt
 ```
-**Important:** Make sure you're in the `BUNKER2.0` directory (showing `BUNKER2.0 %`) and not the home directory (`~ %`) for successful installation.
 
 ---
 

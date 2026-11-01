@@ -109,6 +109,28 @@ def save(db, hashed_pass, path=DB_FILE):
     write_bytes_atomic(path, encrypt_bytes(json.dumps(db).encode("utf-8"), hashed_pass))
 
 
+LEGACY_EMPTY_KEYS = ("notes", "accounts", "profiles")
+
+
+def modify(hashed_pass, mutate, path=DB_FILE):
+    """Load the vault, let ``mutate(db)`` change it in place, save atomically.
+
+    Reloading right before every change keeps edits made by another UI
+    since this one started. Empty list values under the old mobile keys
+    ("notes", "accounts", "profiles") are dropped first: they are the only
+    non-dict values this project ever wrote, and desktop cannot read them.
+    Any other non-dict value makes save() refuse, so nothing is overwritten.
+    Returns whatever ``mutate`` returns.
+    """
+    db = load(hashed_pass, path)
+    for k in LEGACY_EMPTY_KEYS:
+        if db.get(k) == []:
+            del db[k]
+    result = mutate(db)
+    save(db, hashed_pass, path)
+    return result
+
+
 # --- field encoding
 
 def enc(value, key):
@@ -226,6 +248,7 @@ def update_note(entry, key, title=None, content=None, tags=None,
                 favorite=None, private=None):
     """Copy of ``entry`` with only the given fields replaced (None = keep)."""
     out = dict(entry)
+    was_private = bool(out.get("private", False))
     if title is not None:
         out["title"] = enc(title, key)
     if content is not None:
@@ -234,7 +257,8 @@ def update_note(entry, key, title=None, content=None, tags=None,
         out["favorite"] = bool(favorite)
     if private is not None:
         out["private"] = bool(private)
-    if tags is not None or private is not None:
-        is_private = bool(out.get("private", False))
+    is_private = bool(out.get("private", False))
+    if tags is not None or is_private != was_private:
+        # re-encode only when asked to, or when privacy changed (PRIVATE tag)
         out["tags"] = encode_tags(tags, key, is_private)
     return out

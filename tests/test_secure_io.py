@@ -93,11 +93,42 @@ class OutputTests(unittest.TestCase):
         err = PermissionError(13, "Permission denied", "/vault/hunter2")
         self.assertEqual(SECURE_IO.safe_error(err), "PermissionError: Permission denied")
 
-    def test_single_module_instance_under_both_names(self):
-        import sys
-        import SECURE_IO as top_level  # noqa: F401 (alias registered by module)
-        self.assertIs(sys.modules["SECURE_IO"], sys.modules["main.SECURE_IO"])
+    def test_stale_timer_does_not_clear_newer_copy(self):
+        cb = FakeClipboard()
+        SECURE_IO.set_clipboard_backend(cb.copy, cb.paste)
+        try:
+            SECURE_IO.copy_secret("first", timeout=60)
+            stale = SECURE_IO._generation
+            SECURE_IO.copy_secret("second", timeout=60)
+            self.assertFalse(SECURE_IO._timer_fired(stale))
+            self.assertEqual(cb.value, "second")
+            self.assertTrue(SECURE_IO.has_pending_secret())
+        finally:
+            SECURE_IO.clear_clipboard_if_ours()
+            SECURE_IO.set_clipboard_backend(None, None)
 
+    def test_line_ending_changes_still_match(self):
+        cb = FakeClipboard()
+        SECURE_IO.set_clipboard_backend(cb.copy, cb.paste)
+        try:
+            SECURE_IO.copy_secret("line one\nline two\n", timeout=60)
+            cb.value = "line one\r\nline two"  # what some backends return
+            self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
+            self.assertEqual(cb.value, "")
+        finally:
+            SECURE_IO.set_clipboard_backend(None, None)
+
+    def test_fingerprint_set_before_copy(self):
+        seen = {}
+        def copy(text):
+            seen["pending"] = SECURE_IO.has_pending_secret()
+        SECURE_IO.set_clipboard_backend(copy, lambda: "")
+        try:
+            SECURE_IO.copy_secret("hunter2!", timeout=60)
+            self.assertTrue(seen["pending"])
+        finally:
+            SECURE_IO.clear_clipboard_if_ours()
+            SECURE_IO.set_clipboard_backend(None, None)
 
 if __name__ == "__main__":
     unittest.main()

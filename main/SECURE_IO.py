@@ -28,16 +28,13 @@ import threading
 CLIPBOARD_CLEAR_SECONDS = 30
 MASK = "********"
 
-# BUNKER imports modules both as ``main.X`` and as ``X`` (BUNKER.py puts the
-# main/ folder on sys.path). Register this module under both names so there
-# is exactly one clipboard timer and one fingerprint for the whole process.
-_this = sys.modules[__name__]
-for _alias in ("SECURE_IO", "main.SECURE_IO"):
-    sys.modules.setdefault(_alias, _this)
+# Always import this module as ``main.SECURE_IO`` so the process has one
+# clipboard timer and one fingerprint.
 
 _lock = threading.RLock()
 _timer = None
 _fingerprint = None
+_generation = 0  # bumped on every copy; a timer only acts on its own copy
 _backend = None  # (copy, paste) callables; None means "use pyperclip"
 
 
@@ -55,7 +52,10 @@ def _clipboard():
 
 
 def _digest(text):
-    return hashlib.sha256(str(text).encode("utf-8", "surrogatepass")).digest()
+    # Clipboard backends may rewrite line endings or trailing whitespace, so
+    # compare a normalised form; otherwise a copied note might never match.
+    norm = str(text).replace("\r\n", "\n").replace("\r", "\n").rstrip()
+    return hashlib.sha256(norm.encode("utf-8", "surrogatepass")).digest()
 
 
 def _cancel_timer():
@@ -71,21 +71,33 @@ def copy_secret(value, timeout=CLIPBOARD_CLEAR_SECONDS):
     Returns True on success, False if the clipboard is unavailable. Never
     raises and never includes the value in any message.
     """
-    global _timer, _fingerprint
+    global _timer, _fingerprint, _generation
     with _lock:
         _cancel_timer()
+        _generation += 1
+        generation = _generation
+        # Record the fingerprint before copying: if an exit handler runs in
+        # between, it must already know this secret is ours to clear.
+        _fingerprint = _digest(value)
         try:
             copy, _ = _clipboard()
             copy(str(value))
         except Exception:
             _fingerprint = None
             return False
-        _fingerprint = _digest(value)
-        timer = threading.Timer(timeout, clear_clipboard_if_ours)
+        timer = threading.Timer(timeout, _timer_fired, args=(generation,))
         timer.daemon = True
         _timer = timer
         timer.start()
         return True
+
+
+def _timer_fired(generation):
+    # A timer that fired while a newer copy was being made must not clear it.
+    with _lock:
+        if generation != _generation:
+            return False
+        return clear_clipboard_if_ours()
 
 
 def clear_clipboard_if_ours():
@@ -157,6 +169,33 @@ def safe_error(exc):
     if isinstance(exc, OSError) and getattr(exc, "strerror", None):
         return f"{name}: {exc.strerror}"
     return name
+
+
+def install_exit_signal_handlers():
+    """Clear the clipboard when the terminal is closed or the process is told
+    to stop (SIGHUP/SIGTERM), which otherwise kill BUNKER without cleanup.
+
+    Only replaces handlers still at their default, and only from the main
+    thread. Returns the list of signals handled.
+    """
+    import os
+    import signal
+    installed = []
+    if threading.current_thread() is not threading.main_thread():
+        return installed
+    for name in ("SIGHUP", "SIGTERM"):
+        signum = getattr(signal, name, None)
+        if signum is None or signal.getsignal(signum) is not signal.SIG_DFL:
+            continue
+
+        def _handler(num, _frame):
+            clear_clipboard_if_ours()
+            signal.signal(num, signal.SIG_DFL)
+            os.kill(os.getpid(), num)
+
+        signal.signal(signum, _handler)
+        installed.append(name)
+    return installed
 
 
 # Clear on a normal interpreter exit. Paths that leave via os._exit() skip

@@ -15,14 +15,15 @@ Rules this module enforces for the rest of the code base:
   exception's message for non-OS errors.
 
 Nothing in this module writes to disk or to a log, and it never keeps the
-secret itself after copying - only a SHA-256 fingerprint used to recognise
-it on the clipboard later.
+secret itself after copying - only a keyed fingerprint (HMAC-SHA256 under a
+random per-process key) used to recognise it on the clipboard later.
 """
 
 import atexit
 import contextlib
 import hashlib
 import hmac
+import os
 import sys
 import threading
 
@@ -52,11 +53,18 @@ def _clipboard():
     return pyperclip.copy, pyperclip.paste
 
 
+# Random key for this process only. The fingerprint is an HMAC under it, so
+# even someone who can read BUNKER's memory cannot use the fingerprint to
+# test password guesses offline; it only answers "is this the same text?".
+_FINGERPRINT_KEY = os.urandom(32)
+
+
 def _digest(text):
     # Clipboard backends may rewrite line endings or trailing whitespace, so
     # compare a normalised form; otherwise a copied note might never match.
     norm = str(text).replace("\r\n", "\n").replace("\r", "\n").rstrip()
-    return hashlib.sha256(norm.encode("utf-8", "surrogatepass")).digest()
+    return hmac.new(_FINGERPRINT_KEY, norm.encode("utf-8", "surrogatepass"),
+                    hashlib.sha256).digest()
 
 
 def _cancel_timer():

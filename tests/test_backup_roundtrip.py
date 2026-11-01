@@ -124,5 +124,88 @@ class BackupRoundTrip(unittest.TestCase):
         self.assertIn(PROFILES[0][3], exported)  # plain text, by the user's choice
 
 
+NOTES = [("Groceries", "milk, eggs", ["home"], False),
+         ("Private plans", "the launch codes are 0000", ["PRIVATE"], True)]
+
+
+def note_answers(encrypted, filename):
+    table = {
+        "export all notes": "y",
+        "export as encrypted": "y" if encrypted else "n",
+        "see the password as you type": "y",
+        "show your password while typing": "y",
+        "passphrase for encryption": PASSPHRASE,
+        "Confirm passphrase": PASSPHRASE,
+        "passphrase used for encryption": PASSPHRASE,
+        "file name to save notes": filename,
+        "Choose file to import": filename,
+        "import these notes": "y",
+        "Continue with export": "y",
+        "Press 'enter'": "",
+    }
+
+    def answer(prompt, *_a, **_k):
+        for key, value in table.items():
+            if key in prompt:
+                return value
+        raise AssertionError(f"unexpected prompt: {prompt!r}")
+    return answer
+
+
+def make_vault_with_notes():
+    assert run_setup()
+    key = key_for(PASSWORD)
+    enc = lambda v: base64.b64encode(I.vault.encrypt_data(v.encode(), key)).decode()
+    db = {f"n{i}": {"title": enc(t), "content": enc(c), "tags": [enc(x) for x in tags],
+                    "favorite": False, "private": priv}
+          for i, (t, c, tags, priv) in enumerate(NOTES)}
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert I.saveDatabase(db, key)
+    return key
+
+
+def decrypted_notes(key):
+    return sorted((n["title"], n["content"], bool(n.get("private")))
+                  for n in (D.decrypt_note(e, key) | {"private": e.get("private")}
+                            for e in I.loadDatabase(key).values()))
+
+
+class NotesBackupRoundTrip(BackupRoundTrip):
+    test_encrypted_backup_restores_exactly_and_hides_secrets = None
+    test_plain_text_backup_restores_exactly = None
+
+    def _notes_call(self, func, key, encrypted, filename):
+        responder = note_answers(encrypted, filename)
+        with mock.patch.object(D, "timeoutInput", responder), \
+             mock.patch.object(D, "timeout_getpass", responder), \
+             mock.patch("builtins.input", responder), \
+             mock.patch.object(D, "clear_screen", quiet), \
+             mock.patch.object(D, "displayHeader", quiet), \
+             contextlib.redirect_stdout(io.StringIO()):
+            func(key, I.loadDatabase(key))
+
+    def _notes_roundtrip(self, encrypted):
+        name = "notes_backup.json"
+        os.chdir(self.src)
+        key = make_vault_with_notes()
+        expected = decrypted_notes(key)
+        self._notes_call(D.exportNotes, key, encrypted, name)
+        exported = Path(name).read_text(encoding="utf-8")
+        shutil.copy(name, os.path.join(self.dst, name))
+        os.chdir(self.dst)
+        self.assertTrue(run_setup())
+        new_key = key_for(PASSWORD)
+        self._notes_call(D.importNotes, new_key, encrypted, name)
+        self.assertEqual(decrypted_notes(new_key), expected)
+        return exported
+
+    def test_encrypted_notes_backup_restores_exactly(self):
+        exported = self._notes_roundtrip(encrypted=True)
+        self.assertNotIn("launch codes", exported)
+
+    def test_plain_notes_backup_restores_exactly(self):
+        self._notes_roundtrip(encrypted=False)
+
+
 if __name__ == "__main__":
     unittest.main()

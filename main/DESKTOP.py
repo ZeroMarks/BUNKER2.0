@@ -5,6 +5,9 @@ from cryptography.fernet import Fernet
 
 from cryptography.exceptions import InvalidTag
 from main.VAULT_FILES import integrity_status, record_integrity
+from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_export,
+    unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
+    existing_profiles, plan_notes, plan_profiles, has_controls, printable)
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
@@ -3827,224 +3830,228 @@ def exportNotes(hashed_pass, db):
     finally:
         if 'hashed_pass' in locals(): del hashed_pass
         vault.secure_wipe()
+def _choose_import_file():
+    """Ask which .json file to import. Returns a file name, or a timeout/cancel code."""
+    json_files = sorted(f for f in os.listdir('.') if f.endswith('.json'))
+    if json_files:
+        print(f"\n{CYAN}Available .json files in current directory:{RESET}\n")
+        for i, filename in enumerate(json_files, 1):
+            print(f"{GOLD}{i}. {printable(filename)}{RESET}")
+        print(f"\n{GOLD}Enter a number to select a file, or type a filename manually (.c to cancel){RESET}\n")
+    while True:
+        file_input = timeoutInput(
+            f"{GOLD}Choose file to import (1-{len(json_files)} or filename) (.c to cancel): {RESET}"
+        )
+        if file_input == timeoutGlobalCode:
+            return timeoutGlobalCode
+        if file_input == ".c":
+            return ".c"
+        if file_input.isdigit():
+            idx = int(file_input) - 1
+            if 0 <= idx < len(json_files):
+                return json_files[idx]
+            print(f"{RED} ** ALERT: Invalid selection. **{RESET}")
+            continue
+        file_name = file_input if file_input.endswith(".json") else f"{file_input}.json"
+        if not os.path.isfile(file_name):
+            print(f"{RED} ** ALERT: File '{printable(file_name)}' does not exist. **{RESET}")
+            continue
+        return file_name
+
+
+def _load_export(file_name, hashed_pass):
+    """Read an export file, asking for its passphrase if it is encrypted.
+
+    Returns ("ok", structure), ("cancel", None), ("timeout", None) or
+    ("error", None). Every rejection prints its reason; none quotes the file.
+    """
+    try:
+        import_data = read_import_file(file_name)
+        if not is_encrypted_export(import_data):
+            print(f"\n{CYAN}Detected: {GREEN}Plain text BUNKER file{RESET}")
+            return "ok", import_data
+        print(f"\n{CYAN}Detected: {GREEN}Encrypted BUNKER file{RESET}")
+        salt, verifier, ciphertext = unwrap_encrypted(import_data)
+    except ImportRejected as e:
+        print(f"{RED} ** ALERT: {e} Nothing was imported. **{RESET}")
+        return "error", None
+
+    while True:
+        show_password = timeoutInput(
+            f"{GOLD}Do you want to show your password while typing? (y/n) (type (.c) to cancel): {RESET}"
+        )
+        if show_password == timeoutGlobalCode:
+            return "timeout", None
+        show_password = show_password.lower()
+        if show_password == ".c":
+            print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
+            return "cancel", None
+        if show_password in ["y", "n"]:
+            break
+        print(f"{RED} ** ALERT: Please enter 'y' or 'n'. **{RESET}")
+    timeout = vault.manage_config(hashed_pass).get("timeout_value", 60)
+    while True:
+        prompt = f"{GOLD}Enter the passphrase used for encryption (type (.c) to cancel): {RESET}"
+        if show_password == "n":
+            passphrase = timeout_getpass(prompt, timeout)
+        else:
+            print(f"{RED}⚠️  ** Your passphrase will be shown as you type. ** ⚠️{RESET}")
+            passphrase = timeoutInput(prompt)
+        if passphrase == timeoutGlobalCode:
+            print(f"{RED} ** ALERT: Operation canceled due to timeout. **{RESET}")
+            return "timeout", None
+        if passphrase == ".c":
+            print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
+            return "cancel", None
+        export_key = verify_export_encryption(passphrase, salt, verifier)
+        del passphrase
+        if export_key:
+            break
+        print(f"{RED} ** ALERT: Invalid passphrase. Please try again. **{RESET}")
+    try:
+        decrypted = vault.decrypt_data(ciphertext, export_key)
+    except Exception:
+        print(f"{RED} ** ALERT: The passphrase is right but the file's contents are damaged, so it can't be decrypted. Nothing was imported. **{RESET}")
+        return "error", None
+    finally:
+        del export_key
+    try:
+        return "ok", parse_payload(decrypted)
+    except ImportRejected as e:
+        print(f"{RED} ** ALERT: {e} Nothing was imported. **{RESET}")
+        return "error", None
+
+
+def _ask_yes_no(prompt):
+    """Return "y", "n", ".c" or the timeout code."""
+    while True:
+        answer = timeoutInput(prompt)
+        if answer == timeoutGlobalCode:
+            return answer
+        answer = answer.lower()
+        if answer in ("y", "n", ".c"):
+            return answer
+        print(f"{RED} ** ALERT: Please enter 'y' for yes, 'n' for no, or '.c' to cancel. **{RESET}")
+
+
+def _report_import_plan(kind, new_count, duplicates, problems, control_count):
+    """Print what an import will do before the user confirms it."""
+    print(f"{GOLD}{new_count} new {kind} to import.{RESET}")
+    if duplicates:
+        print(f"{GOLD}{duplicates} already in your vault (or repeated in the file): skipped, nothing is overwritten.{RESET}")
+    if problems:
+        print(f"{RED}{len(problems)} could not be read and will be skipped:{RESET}")
+        for number, reason in problems[:10]:
+            print(f"{RED}  - entry {number}: {reason}{RESET}")
+        if len(problems) > 10:
+            print(f"{RED}  ... and {len(problems) - 10} more{RESET}")
+    if control_count:
+        print(f"{GOLD}{control_count} contain terminal control characters. They are shown as \\x.. codes above and stored exactly as in the file.{RESET}")
+
+
+def _finish_import(db, new_entries, hashed_pass, kind):
+    """Save the vault with the new entries added. The in-memory vault changes
+    only if the save succeeds, so a failed save leaves both copies as they were."""
+    updated = dict(db)
+    for entry in new_entries:
+        updated[str(uuid.uuid4())] = entry
+    if not saveDatabase(updated, hashed_pass):
+        print(f"{RED}** ALERT: The vault could not be saved. Nothing was imported. **{RESET}")
+        timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
+        return False
+    db.clear()
+    db.update(updated)
+    print(f"\n{GREEN}** SUCCESS: Import completed. **{RESET}")
+    print(f"{GOLD}{kind.capitalize()} imported: {len(new_entries)}{RESET}")
+    userContinue = timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
+    return userContinue == timeoutGlobalCode
+
+
+def _nothing_new(kind, duplicates, problems):
+    if duplicates and not problems:
+        print(f"{GOLD}** Nothing to import: all {duplicates} {kind} in this file are already in your vault. **{RESET}")
+    elif duplicates or problems:
+        print(f"{RED}** ALERT: Nothing to import: {duplicates} already in your vault, {len(problems)} could not be read. **{RESET}")
+        for number, reason in problems[:10]:
+            print(f"{RED}  - entry {number}: {reason}{RESET}")
+    else:
+        print(f"{RED}** ALERT: No {kind} found in the import file. **{RESET}")
+    userContinue = timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
+    return userContinue == timeoutGlobalCode
+
+
 def importNotes(hashed_pass, db):
-    """Import notes with enhanced security using AES-GCM re-encryption for each note field."""
+    """Import notes from a BUNKER export, skipping notes already in the vault."""
     try:
         displayHeader(f"{CYAN}⬇️  IMPORT NOTES{RESET}")
+        if not isinstance(db, dict):
+            # Never save over a vault we could not read.
+            print(f"{RED}** ALERT: The vault is not loaded, so nothing can be imported. Log in again and retry. **{RESET}")
+            return False
 
-        # Gather all .json files from working directory.
-        json_files = [f for f in os.listdir('.') if f.endswith('.json')]
-        if json_files:
-            print(f"\n{CYAN}Available .json files in current directory:{RESET}\n")
-            for i, filename in enumerate(json_files, 1):
-                print(f"{GOLD}{i}. {filename}{RESET}")
-            print(f"\n{GOLD}Enter a number to select a file, or type a filename manually (.c to cancel){RESET}\n")
+        file_name = _choose_import_file()
+        if file_name in (".c", timeoutGlobalCode):
+            print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
+            return file_name == timeoutGlobalCode
 
-        while True:
-            file_input = timeoutInput(
-                f"{GOLD}Choose file to import (1-{len(json_files)} or filename) (.c to cancel): {RESET}"
-            )
-            if file_input == ".c" or file_input == timeoutGlobalCode:
-                print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                return False if file_input != timeoutGlobalCode else True
-
-            # Numeric selection.
-            if file_input.isdigit():
-                idx = int(file_input) - 1
-                if 0 <= idx < len(json_files):
-                    file_name = json_files[idx]
-                else:
-                    print(f"{RED} ** ALERT: Invalid selection. **{RESET}")
-                    continue
-            else:
-                # Manual filename input.
-                file_name = file_input if file_input.endswith(".json") else f"{file_input}.json"
-
-            if not os.path.isfile(file_name):
-                print(f"{RED} ** ALERT: File '{file_name}' does not exist. **{RESET}")
-                continue
-
-            break  # Valid file selected.
-
-        # Load JSON from file.
+        state, structure = _load_export(file_name, hashed_pass)
+        if state != "ok":
+            return state == "timeout"
         try:
-            with open(file_name, "r", encoding="utf-8") as f:
-                import_data = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"{RED}** ALERT: Invalid JSON file format: {safe_error(e)} **{RESET}")
+            candidates, problems = validate_notes(structure)
+        except ImportRejected as e:
+            print(f"{RED}** ALERT: {e} Nothing was imported. **{RESET}")
             return False
 
-        # Determine if file is encrypted (has salt/verifier/data) or plain text.
-        if (
-            isinstance(import_data, dict)
-            and "watermark" in import_data
-            and import_data["watermark"] == "### Property of ZEROMARKSLLC - EXPORTED with BUNKER ###"
-            and "salt" in import_data
-            and "verifier" in import_data
-            and "data" in import_data
-        ):
-            print(f"\n{CYAN}Detected: {GREEN}Encrypted BUNKER File{RESET}")
-            try:
-                salt = base64.b64decode(import_data["salt"])
-                verifier = base64.b64decode(import_data["verifier"])
-                # Prompt for passphrase
-                while True:
-                    show_password = timeoutInput(
-                        f"{GOLD}Do you want to show your password while typing? (y/n) (type (.c) to cancel): {RESET}"
-                    ).lower()
-                    if show_password == ".c" or show_password == timeoutGlobalCode:
-                        print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                        return False if show_password != timeoutGlobalCode else True
-                    if show_password in ["y", "n"]:
-                        break
-                    print(f"{RED} ** ALERT: Please enter 'y' or 'n'. **{RESET}")
-                timeout = vault.manage_config(hashed_pass).get("timeout_value", 60)
-                while True:
-                    if show_password == "n":
-                        passphrase = timeout_getpass(f"{GOLD}Enter the passphrase used for encryption(type (.c) to cancel): {RESET}", timeout)
-                    else:
-                        print(f"{RED}⚠️  ** Your passphrase will be shown as you type. ** ⚠️{RESET}")
-                        passphrase = timeoutInput(f"{GOLD}Enter the passphrase used for encryption(type (.c) to cancel): {RESET}")
-                    if passphrase == timeoutGlobalCode:
-                        print(f"{RED} ** ALERT: Operation canceled due to timeout. **{RESET}")
-                        return True
-                    elif passphrase == ".c":
-                        print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                        return False
-                    export_key = verify_export_encryption(passphrase, salt, verifier)
-                    if export_key:
-                        break
-                    print(f"{RED} ** ALERT: Invalid passphrase. Please try again. **{RESET}")
-                b64_data = import_data["data"]
-                ciphertext = base64.b64decode(b64_data)
-                decrypted_bytes = vault.decrypt_data(ciphertext, export_key)
-                file_structure = json.loads(decrypted_bytes.decode("utf-8"))
-            except Exception as e:
-                print(f"{RED}** ALERT: Failed to decrypt file: {safe_error(e)} **{RESET}")
-                return False
-        else:
-            print(f"\n{CYAN}Detected: {GREEN}Plain text BUNKER File{RESET}")
-            file_structure = import_data
+        existing = existing_notes(db, lambda f, e: decode_and_decrypt(f, e, hashed_pass),
+                                  lambda t: decode_and_decrypt_tag(t, hashed_pass))
+        new_notes, duplicates = plan_notes(candidates, existing)
+        if not new_notes:
+            return _nothing_new("notes", duplicates, problems)
 
-        if "notes" not in file_structure:
-            print(f"{RED}** ALERT: Invalid file. Missing 'notes' section. **{RESET}")
-            return False
-
-        notes_to_import = file_structure["notes"]
-        if not notes_to_import:
-            print(f"{RED}** ALERT: No notes to import. **{RESET}")
-            return False
-
-        # Preview the notes for verification.
         print(f"{CYAN}Notes to be imported:{RESET}\n")
-        valid_notes = []
-        for idx, (k, note_obj) in enumerate(notes_to_import.items(), start=1):
-            if not isinstance(note_obj, dict) or "title" not in note_obj or "content" not in note_obj:
-                print(f"{RED}** ALERT: Note {idx} is missing required fields. Skipping... **{RESET}")
-                continue
-
-            title_str = note_obj["title"]
-            content_str = note_obj["content"]
-            is_private = note_obj.get("private", False)
-            favorite = "⭐" if note_obj.get("favorite", False) else ""
-            tags = note_obj.get("tags", ["N/A"])
-            if not isinstance(tags, list) or not tags:
-                tags = ["N/A"]
-            content_preview_parts = content_str.split()
-            content_preview_str = " ".join(content_preview_parts[:3])
-            if len(content_preview_parts) > 3:
-                content_preview_str += "..."
-            print(f"{CYAN}Note {idx} {favorite}{RESET} {GOLD}|{RESET} {LPURPLE}Tags: {', '.join(tags)}{RESET}")
-            if is_private:
+        control_count = 0
+        for idx, note in enumerate(new_notes, start=1):
+            favorite = "⭐" if note["favorite"] else ""
+            tag_text = ", ".join(printable(t) for t in note["tags"])
+            if note["private"]:
+                print(f"{CYAN}Note {idx} {favorite}{RESET} {GOLD}|{RESET} {LPURPLE}Tags: {tag_text}{RESET}")
                 print(f"{L_CYAN}Data: {RED}🔒[PRIVATE]{RESET}\n")
             else:
-                print(f"{L_CYAN}Title: {RESET}{title_str} {DBLUE}| Preview: {RESET}{content_preview_str}\n")
-            valid_notes.append({
-                "title": title_str,
-                "content": content_str,
-                "tags": tags,
-                "private": is_private,
-                "favorite": note_obj.get("favorite", False)
-            })
+                words = note["content"].split()
+                preview = " ".join(words[:3]) + ("..." if len(words) > 3 else "")
+                print(f"{CYAN}Note {idx} {favorite}{RESET} {GOLD}|{RESET} {LPURPLE}Tags: {tag_text}{RESET}")
+                print(f"{L_CYAN}Title: {RESET}{printable(note['title'], 80)} {DBLUE}| Preview: {RESET}{printable(preview, 80)}\n")
+            if any(has_controls(s) for s in (note["title"], note["content"], *note["tags"])):
+                control_count += 1
+        _report_import_plan("notes", len(new_notes), duplicates, problems, control_count)
 
-        if not valid_notes:
-            print(f"{RED}** ALERT: No valid notes found to import. **{RESET}")
-            return False
-
-        # Confirm import.
-        while True:
-            confirm = timeoutInput(f"{GOLD}Do you want to import these notes? (y/n) (.c to cancel): {RESET}").lower()
-            if confirm == ".c" or confirm == timeoutGlobalCode:
-                print(f"{RED}** ALERT: Operation canceled. **{RESET}")
-                return False if confirm != timeoutGlobalCode else True
-            if confirm in ["y", "n"]:
-                break
-            print(f"{RED}** ALERT: Please enter 'y' or 'n' or '.c'. **{RESET}")
-
-        if confirm == "n":
+        confirm = _ask_yes_no(f"{GOLD}Do you want to import these notes? (y/n) (.c to cancel): {RESET}")
+        if confirm == timeoutGlobalCode:
+            return True
+        if confirm != "y":
             print(f"{RED}** ALERT: Import canceled by user. **{RESET}")
             return False
 
-        if not isinstance(db, dict):
-            print(f"{RED}** ALERT: The database is not valid. Creating a new one... **{RESET}")
-            db = {}
-
-        imported_count = 0
-        for note_obj in valid_notes:
-            try:
-                note_uuid = str(uuid.uuid4())
-                title_str = note_obj["title"]
-                content_str = note_obj["content"]
-                is_private = note_obj.get("private", False)
-                is_favorite = note_obj.get("favorite", False)
-                # Encrypt fields and base64 encode for JSON
-                enc_title = base64.b64encode(vault.encrypt_data(title_str.encode(), hashed_pass)).decode('utf-8')
-                enc_content = base64.b64encode(vault.encrypt_data(content_str.encode(), hashed_pass)).decode('utf-8')
-                tags = []
-                if is_private:
-                    private_tag = base64.b64encode(vault.encrypt_data("PRIVATE".encode(), hashed_pass)).decode('utf-8')
-                    tags = [private_tag]
-                else:
-                    tag_list = note_obj.get("tags", ["N/A"])
-                    if not tag_list or not isinstance(tag_list, list):
-                        tag_list = ["N/A"]
-                    for tag in tag_list:
-                        tag_stripped = tag.strip()
-                        if tag_stripped:
-                            enc_tag = base64.b64encode(vault.encrypt_data(tag_stripped.encode(), hashed_pass)).decode('utf-8')
-                            tags.append(enc_tag)
-                    if not tags:
-                        na_tag = base64.b64encode(vault.encrypt_data("N/A".encode(), hashed_pass)).decode('utf-8')
-                        tags = [na_tag]
-                db[note_uuid] = {
-                    "title": enc_title,
-                    "content": enc_content,
-                    "tags": tags,
-                    "favorite": is_favorite,
-                    "private": is_private
-                }
-                imported_count += 1
-            except Exception as e:
-                print(f"{RED}** ALERT: Failed to import a note: {safe_error(e)} **{RESET}")
-                continue
-
-        if saveDatabase(db, hashed_pass):
-            print(f"\n{GREEN}** SUCCESS: Import completed. **{RESET}")
-            print(f"{GOLD}Notes imported: {imported_count}{RESET}")
-            timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
-            return False
-        else:
-            print(f"{RED}** ALERT: Failed to save updated database **{RESET}")
-            return False
+        encrypt = lambda text: base64.b64encode(vault.encrypt_data(text.encode(), hashed_pass)).decode('utf-8')
+        entries = [{
+            "title": encrypt(note["title"]),
+            "content": encrypt(note["content"]),
+            "tags": [encrypt(t) for t in note["tags"]],
+            "favorite": note["favorite"],
+            "private": note["private"],
+        } for note in new_notes]
+        return _finish_import(db, entries, hashed_pass, "notes")
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to import notes: {safe_error(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to import notes: {safe_error(e)}. Nothing was imported. **{RESET}")
         return False
 
     finally:
         if 'hashed_pass' in locals():
             del hashed_pass
-        vault.secure_wipe()  
+        vault.secure_wipe()
+
 # import/export
 def manageProfiles(hashed_pass, db):
     """Manage profiles export/import with enhanced security"""
@@ -4435,216 +4442,83 @@ def exportProfiles(hashed_pass, db):
         vault.secure_wipe()
 
 def importProfiles(hashed_pass, db):
-    """Import profiles with enhanced security and passphrase support."""
+    """Import profiles from a BUNKER export, skipping profiles already in the vault."""
     try:
         displayHeader(f"{CYAN}⬇️  IMPORT PROFILES{RESET}")
+        if not isinstance(db, dict):
+            print(f"{RED}** ALERT: The vault is not loaded, so nothing can be imported. Log in again and retry. **{RESET}")
+            return False
 
-        # Get all .json files in current directory
-        json_files = [f for f in os.listdir('.') if f.endswith('.json')]
-        if json_files:
-            print(f"\n{CYAN}Available JSON files in current directory:{RESET}\n")
-            for i, file in enumerate(json_files, 1):
-                print(f"{GOLD}{i}. {file}{RESET}")
-            print(f"\n{GOLD}Enter a number to select a file, or type a filename manually (.c to cancel){RESET}\n")
+        file_name = _choose_import_file()
+        if file_name in (".c", timeoutGlobalCode):
+            print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
+            return file_name == timeoutGlobalCode
 
-        while True:
-            file_input = timeoutInput(
-                f"{GOLD}Choose file to import (1-{len(json_files)} or filename): {RESET}"
-            )
-            if file_input == ".c" or file_input == timeoutGlobalCode:
-                print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                return False if file_input != timeoutGlobalCode else True
-
-            # Handle numeric choice
-            if file_input.isdigit():
-                index = int(file_input) - 1
-                if 0 <= index < len(json_files):
-                    file_name = json_files[index]
-                else:
-                    print(f"{RED} ** ALERT: Invalid number. Please choose between 1 and {len(json_files)}. **{RESET}")
-                    continue
-            else:
-                file_name = file_input if file_input.endswith('.json') else f"{file_input}.json"
-
-            if not os.path.isfile(file_name):
-                print(f"{RED} ** ALERT: File '{file_name}' does not exist. **{RESET}")
-                continue
-            break
-
+        state, structure = _load_export(file_name, hashed_pass)
+        if state != "ok":
+            return state == "timeout"
         try:
-            with open(file_name, "r", encoding="utf-8") as file:
-                import_data = json.load(file)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"{RED} ** ALERT: Invalid JSON file format: {safe_error(e)} **{RESET}")
+            candidates, problems = validate_profiles(structure)
+        except ImportRejected as e:
+            print(f"{RED} ** ALERT: {e} Nothing was imported. **{RESET}")
             return False
 
-        # Check if this is an encrypted file by looking for salt and verifier
-        if (
-            "watermark" in import_data and 
-            import_data["watermark"] == "### Property of ZEROMARKSLLC - EXPORTED with BUNKER ###" and
-            "salt" in import_data and 
-            "verifier" in import_data and 
-            "data" in import_data
-        ):
-            print(f"\n{CYAN}Detected: {GREEN}Encrypted BUNKER file{RESET}")
-            try:
-                salt = base64.b64decode(import_data["salt"])
-                verifier = base64.b64decode(import_data["verifier"])
-                # Ask about password visibility first
-                while True:
-                    show_password = timeoutInput(
-                        f"{GOLD}Do you want to show your password while typing? (y/n) (type (.c) to cancel): {RESET}"
-                    ).lower()
-                    if show_password == ".c" or show_password == timeoutGlobalCode:
-                        print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                        return False if show_password != timeoutGlobalCode else True
-                    if show_password in ["y", "n"]:
-                        break
-                    print(f"{RED} ** ALERT: Please enter 'y' or 'n'. **{RESET}")
-                timeout = vault.manage_config(hashed_pass).get("timeout_value", 60)
-                while True:
-                    if show_password == "n":
-                        passphrase = timeout_getpass(f"{GOLD}Enter the passphrase used for encryption (type (.c) to cancel): {RESET}", timeout)
-                    else:
-                        print(f"{RED}⚠️  ** Your passphrase will be shown as you type. ** ⚠️{RESET}")
-                        passphrase = timeoutInput(f"{GOLD}Enter the passphrase used for encryption (type (.c) to cancel): {RESET}")
-                    if passphrase == timeoutGlobalCode:
-                        print(f"{RED} ** ALERT: Operation canceled due to timeout. **{RESET}")
-                        return True
-                    elif passphrase == ".c":
-                        print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                        return False
-                    export_key = verify_export_encryption(passphrase, salt, verifier)
-                    if export_key:
-                        break
-                    print(f"{RED} ** ALERT: Invalid passphrase. Please try again. **{RESET}")
-                encrypted_data = base64.b64decode(import_data["data"])
-                decrypted_data = vault.decrypt_data(encrypted_data, export_key)
-                file_structure = json.loads(decrypted_data)
-                profiles_to_import = file_structure.get("profiles", {})
-            except Exception as e:
-                print(f"{RED} ** ALERT: Failed to decrypt file. File may be corrupted. Error: {safe_error(e)} **{RESET}")
-                userContinue = timeoutInput(f"{GOLD}\nPress 'enter' to try another file or type (.c) to cancel...{RESET}")
-                if userContinue == ".c" or userContinue == timeoutGlobalCode:
-                    return False if userContinue != timeoutGlobalCode else True
-        else:
-            if "profiles" in import_data:
-                print(f"\n{CYAN}Detected: {GREEN}Plain text BUNKER file{RESET}")
-                profiles_to_import = import_data["profiles"]
-            else:
-                print(f"{RED} ** ALERT: Invalid file format. **{RESET}")
-                userContinue = timeoutInput(f"{GOLD}\nPress 'enter' to try another file or type (.c) to cancel...{RESET}")
-                if userContinue == ".c" or userContinue == timeoutGlobalCode:
-                    return False if userContinue != timeoutGlobalCode else True
+        existing = existing_profiles(db, lambda f, e: decode_and_decrypt(f, e, hashed_pass))
+        new_profiles, duplicates, same_login = plan_profiles(candidates, existing)
+        if not new_profiles:
+            return _nothing_new("profiles", duplicates, problems)
 
-        if not profiles_to_import:
-            print(f"{RED} ** ALERT: No profiles found in the import file. **{RESET}")
+        show = _ask_yes_no(f"{GOLD}Do you want to display passwords? (y/n): {RESET}")
+        if show == timeoutGlobalCode:
+            return True
+        if show == ".c":
+            print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
             return False
 
-        # Ask if user wants to display passwords
-        show_passwords = timeoutInput(f"{GOLD}Do you want to display passwords? (y/n): {RESET}").lower()
-        while True:
-            if show_passwords in ['y', 'n']:
-                show_passwords = (show_passwords == 'y')
-                break
-            print(f"{RED} ** ALERT: Please enter 'y' for yes or 'n' for no. **{RESET}")
-            show_passwords = timeoutInput(f"{GOLD}Do you want to display passwords? (y/n): {RESET}").lower()
-
-        # Show profiles to be imported
         print(f"\n{CYAN}Profiles to be imported:{RESET}\n")
-        for idx, (_, profile_data) in enumerate(profiles_to_import.items(), 1):
-            try:
-                if "domain" not in profile_data or "password" not in profile_data:
-                    print(f"{RED}** ALERT: Profile {idx} missing required fields. Skipping... **{RESET}")
-                    continue
-
-                domain = profile_data["domain"]
-                email = profile_data.get("email", "N/A")
-                username = profile_data.get("username", "N/A")
-                password = profile_data["password"] if show_passwords else "********"
-                favorite = "⭐" if profile_data.get("favorite", False) else ""
-
-                # Compose tags for display (use domain, email, username as tags for demo, or adjust as needed)
-                tags = []
-                if email and email != "N/A":
-                    tags.append(email)
-                if username and username != "N/A":
-                    tags.append(username)
-                if not tags:
-                    tags = ["N/A"]
-
-                # Compose preview (first 3 words of password, or masked)
-                if show_passwords:
-                    pw_preview = " ".join(password.split()[:3])
-                    if len(password.split()) > 3:
-                        pw_preview += "..."
-                else:
-                    pw_preview = "********"
-
-                print(f"{CYAN}Profile {idx} {favorite} {GOLD}| Tags: {', '.join(tags)}{RESET}")
-                print(f"{L_CYAN}Domain: {RESET}{domain}")
-                reveal_secret(f"{L_CYAN}Password: {RESET}", f"{pw_preview}\n")
-
-            except Exception as e:
-                print(f"{RED}Error processing profile {idx}: {safe_error(e)}{RESET}")
-                continue
-        # Confirm import
-        while True:
-            confirm = timeoutInput(
-                f"\n{GOLD}Do you want to import these profiles? (y/n) (type (.c) to cancel): {RESET}"
-            ).lower()
-            if confirm == ".c" or confirm == timeoutGlobalCode:
-                print(f"{RED} ** ALERT: Operation canceled. **{RESET}")
-                return False if confirm != timeoutGlobalCode else True
-            elif confirm in ['y', 'n']:
-                if confirm == 'n':
-                    print(f"{RED} ** ALERT: Import canceled by user. **{RESET}")
-                    return False
-                break
+        control_count = 0
+        for idx, profile in enumerate(new_profiles, 1):
+            favorite = "⭐" if profile["favorite"] else ""
+            tags = [printable(profile[f], 60) for f in ("email", "username") if profile[f] != "N/A"] or ["N/A"]
+            print(f"{CYAN}Profile {idx} {favorite} {GOLD}| Tags: {', '.join(tags)}{RESET}")
+            print(f"{L_CYAN}Domain: {RESET}{printable(profile['domain'], 80)}")
+            if show == "y":
+                reveal_secret(f"{L_CYAN}Password: {RESET}", f"{printable(profile['password'])}\n")
             else:
-                print(f"{RED} ** ALERT: Please enter 'y' for yes, 'n' for no, or '.c' to cancel. **{RESET}")
+                print(f"{L_CYAN}Password: {RESET}{mask()}\n")
+            if any(has_controls(profile[f]) for f in ("domain", "email", "username", "password")):
+                control_count += 1
+        _report_import_plan("profiles", len(new_profiles), duplicates, problems, control_count)
+        if same_login:
+            print(f"{GOLD}{same_login} have the same site and login as a profile you already have, but a different password. "
+                  f"They will be added next to it, so you can compare and delete the old one.{RESET}")
 
-        # Import profiles with enhanced security
-        imported_count = 0
-        for _, profile_data in profiles_to_import.items():
-            try:
-                if "domain" not in profile_data or "password" not in profile_data:
-                    continue
-                profile_id = str(uuid.uuid4())
-                encrypted_profile = {
-                    "domain": base64.b64encode(vault.encrypt_data(str(profile_data["domain"]).encode(), hashed_pass)).decode("utf-8"),
-                    "password": base64.b64encode(vault.encrypt_data(str(profile_data["password"]).encode(), hashed_pass)).decode("utf-8"),
-                    "favorite": profile_data.get("favorite", False),
-                    "email": base64.b64encode(vault.encrypt_data(str(profile_data.get("email", "N/A")).encode(), hashed_pass)).decode("utf-8"),
-                    "username": base64.b64encode(vault.encrypt_data(str(profile_data.get("username", "N/A")).encode(), hashed_pass)).decode("utf-8"),
-                }
-                db[profile_id] = encrypted_profile
-                imported_count += 1
-            except Exception as e:
-                print(f"{RED} ** ALERT: Error importing profile: {safe_error(e)} **{RESET}")
-                continue
+        confirm = _ask_yes_no(f"\n{GOLD}Do you want to import these profiles? (y/n) (type (.c) to cancel): {RESET}")
+        if confirm == timeoutGlobalCode:
+            return True
+        if confirm != "y":
+            print(f"{RED} ** ALERT: Import canceled by user. **{RESET}")
+            return False
 
-        encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-        with open("Bunker.mmf", "wb") as f:
-            f.write(encrypted_db)
-
-        print(f"\n{GREEN}** SUCCESS: Import completed **{RESET}")
-        print(f"{GOLD}Profiles imported: {imported_count}{RESET}")
-        timeoutInput(f"{GOLD}\nPress 'enter' to return to menu...{RESET}")
-        return False
+        encrypt = lambda text: base64.b64encode(vault.encrypt_data(text.encode(), hashed_pass)).decode("utf-8")
+        entries = [{
+            "domain": encrypt(p["domain"]),
+            "password": encrypt(p["password"]),
+            "favorite": p["favorite"],
+            "email": encrypt(p["email"]),
+            "username": encrypt(p["username"]),
+        } for p in new_profiles]
+        return _finish_import(db, entries, hashed_pass, "profiles")
 
     except Exception as e:
-        print(f"{RED} ** ALERT: Failed to import profiles: {safe_error(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Failed to import profiles: {safe_error(e)}. Nothing was imported. **{RESET}")
         return False
 
     finally:
-        if 'passphrase' in locals(): del passphrase
-        if 'export_key' in locals(): del export_key
-        if 'decrypted_data' in locals(): del decrypted_data
-        if 'file_structure' in locals(): del file_structure
-        if 'profiles_to_import' in locals(): del profiles_to_import
-        if 'hashed_pass' in locals(): del hashed_pass
+        if 'hashed_pass' in locals():
+            del hashed_pass
         vault.secure_wipe()
+
 
 def tagNotes(hashed_pass, db):
     """Sort and find notes by tags with enhanced security"""

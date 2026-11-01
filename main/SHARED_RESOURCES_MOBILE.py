@@ -1,5 +1,6 @@
 import os, platform
 from main.SECURE_IO import safe_error
+from main.VAULT_STORE import write_bytes_atomic
 import importlib.util
 import time
 import sys
@@ -820,8 +821,7 @@ def vaultSetup():
             
             # Save empty database
             encrypted_db = vault.encrypt_data(json.dumps(empty_db).encode(), derived_key)
-            with open("Bunker.mmf", "wb") as f:
-                f.write(encrypted_db)
+            write_bytes_atomic("Bunker.mmf", encrypted_db)
 
             if os.name == 'posix':
                 os.chmod("Bunker.mmf", 0o600)

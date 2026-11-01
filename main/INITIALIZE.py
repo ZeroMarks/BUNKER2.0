@@ -1,6 +1,7 @@
 import base64, json, sys, getpass, os, gc, random, string, \
 platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
 from main.SECURE_IO import safe_error
+from main.VAULT_STORE import write_bytes_atomic
 
 from typing import Optional, Dict, Any, Tuple, Union, List
 
@@ -467,8 +468,7 @@ def overwrite_db(new_contents):
             new_contents = new_contents.encode()
             
         # Write new contents as binary
-        with open("Bunker.mmf", "wb") as file:
-            file.write(new_contents)
+        write_bytes_atomic("Bunker.mmf", new_contents)
             
         # Set proper permissions on Unix-like systems
         if os.name == 'posix':
@@ -494,8 +494,8 @@ def overwrite_db(new_contents):
                 latest_backup = max(backup_files, key=lambda x: int(x.split(".")[-1]))
                 print(f"{GOLD}Attempting to restore from backup: {latest_backup}{RESET}")
                 
-                with open(latest_backup, "rb") as src, open("Bunker.mmf", "wb") as dst:
-                    dst.write(src.read())
+                with open(latest_backup, "rb") as src:
+                    write_bytes_atomic("Bunker.mmf", src.read())
                     
                 print(f"{GREEN}Restored from backup{RESET}")
         except Exception as restore_error:
@@ -1224,8 +1224,7 @@ def saveDatabase(db, hashed_pass):
     try:
         db_bytes = json.dumps(db).encode('utf-8')
         encrypted_db = vault.encrypt_data(db_bytes, hashed_pass)
-        with open("Bunker.mmf", "wb") as f:
-            f.write(encrypted_db)
+        write_bytes_atomic("Bunker.mmf", encrypted_db)
         if os.name == 'posix':
             os.chmod("Bunker.mmf", 0o600)
         file_size = os.path.getsize("Bunker.mmf")
@@ -2110,8 +2109,7 @@ def cleanupDatabase(hashed_pass, db):
             encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
             
             # Write directly as bytes to ensure consistent format
-            with open("Bunker.mmf", "wb") as f:
-                f.write(encrypted_db)
+            write_bytes_atomic("Bunker.mmf", encrypted_db)
                 
             print(f"\n{GREEN}** Database cleaned up: Removed {len(invalid_entries)} invalid entries **{RESET}")
             if profile_count > 0:

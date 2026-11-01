@@ -20,6 +20,7 @@ from SHARED_RESOURCES_MOBILE import (
     MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN,
     clear_screen, ModernUI, detect_device
 )
+from main.SECURE_IO import install_exit_signal_handlers
 
 def load_interface_module(module_name):
     """Safely load a Python module by name"""
@@ -38,6 +39,10 @@ def load_interface_module(module_name):
 # DETECT AND ROUTE TO APPROPRIATE INTERFACE
 def main():
     try:
+        # Clear any copied secret if the terminal is closed or BUNKER is
+        # told to stop (SIGHUP/SIGTERM skip the normal cleanup otherwise).
+        install_exit_signal_handlers()
+
         # First detect device type and set up UI preference
         clear_screen()
         

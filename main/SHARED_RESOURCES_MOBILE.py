@@ -605,9 +605,9 @@ def secure_cleanup_common():
 def timeoutCleanup():
     """Cleanup on timeout"""
     try:
-        clear_screen()
         secure_cleanup_common()
-        os._exit(0)  
+        clear_screen()
+        os._exit(0)
     except Exception as e:
         print(f"{RED}Error during timeout cleanup: {safe_error(e)}{RESET}")
         os._exit(1)

@@ -130,5 +130,33 @@ class OutputTests(unittest.TestCase):
             SECURE_IO.clear_clipboard_if_ours()
             SECURE_IO.set_clipboard_backend(None, None)
 
+class SignalTests(unittest.TestCase):
+    def test_sigterm_clears_clipboard_before_exit(self):
+        import os, signal, subprocess, sys, tempfile
+        if not hasattr(signal, "SIGTERM") or os.name == "nt":
+            self.skipTest("POSIX only")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with tempfile.TemporaryDirectory() as tmp:
+            box = os.path.join(tmp, "clipboard")
+            child = (
+                "import os, signal, time\n"
+                "from main import SECURE_IO\n"
+                f"box = {box!r}\n"
+                "def copy(t):\n"
+                "    open(box, 'w').write(t)\n"
+                "def paste():\n"
+                "    return open(box).read()\n"
+                "SECURE_IO.set_clipboard_backend(copy, paste)\n"
+                "assert 'SIGTERM' in SECURE_IO.install_exit_signal_handlers()\n"
+                "SECURE_IO.copy_secret('hunter2!', timeout=60)\n"
+                "os.kill(os.getpid(), signal.SIGTERM)\n"
+                "time.sleep(5)\n"
+            )
+            proc = subprocess.run([sys.executable, "-c", child], cwd=root, timeout=20)
+            self.assertEqual(proc.returncode, -signal.SIGTERM)
+            with open(box) as f:
+                self.assertEqual(f.read(), "")
+
+
 if __name__ == "__main__":
     unittest.main()

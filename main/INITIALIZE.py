@@ -1016,11 +1016,12 @@ def timeoutCleanup():
     Clears sensitive data from memory, displays a timeout message, and exits the program.
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display timeout message
         print(title_art)
@@ -1045,11 +1046,12 @@ def interruptCleanup():
     Clears sensitive data from memory, displays an interrupt message, and exits the program.
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display interrupt message
         print(title_art)
@@ -1080,11 +1082,12 @@ def errorCleanup(error_message="An unexpected error occurred"):
         error_message: Specific error message to display
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display error message
         print(title_art)

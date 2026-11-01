@@ -699,6 +699,21 @@ def get_external_ip():
         return "Unknown"
     
     
+def local_ipv4():
+    """First non-loopback IPv4 address of this machine, read from the local
+    interface table. Makes no network request and no DNS lookup."""
+    try:
+        for name, addrs in psutil.net_if_addrs().items():
+            if name.startswith("lo"):
+                continue
+            for addr in addrs:
+                if addr.family == socket.AF_INET and not addr.address.startswith("127."):
+                    return addr.address
+    except Exception:
+        pass
+    return "Unknown"
+
+
 def get_network_interfaces():
     """Get network interfaces with enhanced error handling"""
     try:

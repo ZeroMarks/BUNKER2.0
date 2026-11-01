@@ -22,7 +22,7 @@ from main.SHARED_RESOURCES import (title_art, clear_screen, subwm,
 divider, check_terminal_size, display_watermark, display_bunker,
 start_ip_fetch_thread, stop_ip_fetch_thread, self_destruct, safe_exit, spinning_line,
 displayHeader, displaySection, get_uptime, check_vpn, combined_tips,
-get_external_ip, check_password_strength, to_clipboard,get_network_connections,
+get_external_ip, local_ipv4, check_password_strength, to_clipboard,get_network_connections,
 format_connections,get_network_interfaces, display_network_summary)
 
 # LOGIN / SETUP
@@ -1009,54 +1009,9 @@ def system_info(hashed_pass, db):
             print(f"{RED} ** ALERT: Error fetching hostname: {safe_error(e)} **{RESET}")
             hostname = "Unknown"
         
-        # Get local IP safely
-        try:
-            # Try multiple methods to get local IP
-            ip_address = None
-            
-            # Method 1: Using socket
-            try:
-                ip_address = socket.gethostbyname(hostname)
-            except:
-                pass
-                
-            # Method 2: Using a socket connection (more reliable)
-            if not ip_address:
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    s.connect(("8.8.8.8", 80))
-                    ip_address = s.getsockname()[0]
-                    s.close()
-                except:
-                    pass
-            
-            # Method 3: Using psutil
-            if not ip_address:
-                for interface, addrs in psutil.net_if_addrs().items():
-                    if interface != 'lo':  # Skip loopback
-                        for addr in addrs:
-                            if addr.family == socket.AF_INET:
-                                ip_address = addr.address
-                                break
-                        if ip_address:
-                            break
-                            
-            if not ip_address:
-                ip_address = "Unknown"
-        except Exception as e:
-            print(f"{RED} ** ALERT: Error determining local IP: {safe_error(e)} **{RESET}")
-            ip_address = "Unknown"
-        
-        # Get external IP safely
-        try:
-            external_ip = get_external_ip()
-            if not external_ip:
-                external_ip = "Unknown"
-        except Exception as e:
-            print(f"{RED} ** ALERT: Error fetching external IP: {safe_error(e)} **{RESET}")
-            external_ip = "Unknown"
-        
-        # Ask if user wants to see IP addresses
+        # IP addresses are looked up only after the user asks for them, and
+        # the public IP (the one network request on this screen) only after
+        # a second, explicit yes.
         if network_choice == "y":
             while True:
                 ip_choice = (
@@ -1067,17 +1022,41 @@ def system_info(hashed_pass, db):
                     .lower()
                 )
                 if ip_choice in ["y", "n", ".c"]:
-                    if ip_choice == "y":
-                        print(f"🔹 Local IP Address: {ip_address}")
-                        print(f"🔹 External IP Address: {external_ip}")
-                    elif ip_choice == ".c":
+                    if ip_choice == ".c":
                         print("Returning to menu")
                         return False
                     break
-                else:
+                print(
+                    f"{RED} ** ALERT: Invalid input. Please enter 'y', 'n', or '.c' to cancel. **{RESET}"
+                )
+
+            if ip_choice == "y":
+                print(f"🔹 Local IP Address: {local_ipv4()}")
+                while True:
+                    lookup_choice = (
+                        input(
+                            f"{GOLD}\nLook up your public IP online? This asks api.ipify.org "
+                            f"(or ifconfig.me / icanhazip.com) and nothing else is sent. "
+                            f"(y/n) (type (.c) to cancel): {RESET}"
+                        )
+                        .strip()
+                        .lower()
+                    )
+                    if lookup_choice in ["y", "n", ".c"]:
+                        break
                     print(
                         f"{RED} ** ALERT: Invalid input. Please enter 'y', 'n', or '.c' to cancel. **{RESET}"
                     )
+                if lookup_choice == ".c":
+                    print("Returning to menu")
+                    return False
+                if lookup_choice == "y":
+                    try:
+                        external_ip = get_external_ip() or "Unknown"
+                    except Exception as e:
+                        print(f"{RED} ** ALERT: Error fetching external IP: {safe_error(e)} **{RESET}")
+                        external_ip = "Unknown"
+                    print(f"🔹 External IP Address: {external_ip}")
 
         # Check VPN status safely
         try:

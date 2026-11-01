@@ -69,11 +69,17 @@ concern for AES-GCM.
   all files together, keeping the old ones until every write succeeded.
 - **Atomic, private writes** (0600 temp file, fsync, rename) for the salt,
   settings, key and export files.
-- **Vault data never leaves the machine.** BUNKER's only network use is
-  looking up your public IP: with the IP display turned on (ipify, and a
-  connectivity check to 8.8.8.8), and on the System info screen (ipify,
-  ifconfig.me, icanhazip.com). Those services see your IP address and when
-  BUNKER runs; turn the IP display off if that matters to you.
+- **Vault data never leaves the machine.** BUNKER makes no network request
+  unless you ask it to look up your public IP, in one of two places:
+  - the IP display (off by default): once turned on, it checks connectivity
+    against 8.8.8.8 and asks api64.ipify.org every 30 seconds;
+  - the System info screen: only after you answer yes to "Look up your
+    public IP online?" (api.ipify.org, falling back to ifconfig.me and
+    icanhazip.com).
+
+  Those services see your IP address and when you asked. Nothing from the
+  vault is sent. `tests/test_system_info_network.py` checks that every other
+  answer on the System info screen leaves the network untouched.
 
 ## 6. Known limits (residual risk)
 

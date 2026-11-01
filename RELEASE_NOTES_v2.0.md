@@ -53,6 +53,11 @@ a known limitation, it says so.
 - **Secrets are shown only when you ask.** Passwords and note contents are
   printed only after you choose to view them, all through one display function.
   Nothing writes them to a log file.
+- **The System info screen asks before going online.** It used to look up
+  your public IP from three web services every time you opened it, even if
+  you declined to see network details. It now does so only after you answer
+  yes to "Look up your public IP online?"; the local IP is read from your
+  network interfaces without any request.
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.
@@ -117,7 +122,8 @@ python3 -m unittest discover -s tests -t .
 
 The tests cover the first-run flow end to end with real encryption, the
 self-destruct policy, clipboard clearing (timer, outages, terminal close),
-safe error text, atomic and owner-only file writes, plain output, and a
+safe error text, atomic and owner-only file writes, plain output, that the
+System info screen stays offline unless you ask for your public IP, and a
 fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
 with Python 3.10-3.13, plus a dependency audit. Most interactive menus are
 not covered by automated tests.

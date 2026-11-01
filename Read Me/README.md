@@ -75,6 +75,12 @@ cd ~/Desktop/BUNKER2.0
 pip install -r requirements.txt
 ```
 
+**Verified install (optional):** `requirements.lock` pins the exact versions
+tested in CI with their SHA-256 hashes, so pip refuses any altered package:
+```bash
+pip install --require-hashes -r requirements.lock
+```
+
 ---
 
 ## 🔧 Troubleshooting

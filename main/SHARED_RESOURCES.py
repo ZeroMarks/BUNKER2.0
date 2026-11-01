@@ -461,8 +461,27 @@ def get_config_paths():
                 
     return paths
 
+def safe_exit(message, code=1):
+    """Leave BUNKER after an error WITHOUT touching the vault.
+
+    Policy: the vault is only ever destroyed by self_destruct() when the
+    failed-login limit is reached. Crashes, errors, EOF, Ctrl+C and
+    timeouts must end here (or in the timeout/interrupt cleanups) instead.
+    """
+    print(f"{RED}** ALERT: {message} **{RESET}")
+    print(f"{CYAN}BUNKER closed. Your vault files were not changed.{RESET}")
+    try:
+        from main.SHARED_RESOURCES_MOBILE import secure_cleanup_common
+        secure_cleanup_common()
+    except Exception:
+        pass
+    sys.exit(code)
+
+
 def self_destruct():
-    """Securely delete all sensitive files with multiple overwrite passes and trash bin bypass"""
+    """Destroy the vault. Only called when the failed-login limit is reached.
+
+    Securely deletes all sensitive files with multiple overwrite passes."""
     # Updated list of sensitive files
     sensitive_files = [
         "Bunker.mmf", 

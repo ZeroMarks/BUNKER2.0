@@ -4,6 +4,7 @@ import keyboard as kb
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
+from cryptography.exceptions import InvalidTag
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
@@ -19,7 +20,7 @@ MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN )
 
 from main.SHARED_RESOURCES import (title_art, clear_screen, subwm,
 divider, check_terminal_size, display_watermark, display_bunker,
-start_ip_fetch_thread, stop_ip_fetch_thread, self_destruct, spinning_line,
+start_ip_fetch_thread, stop_ip_fetch_thread, self_destruct, safe_exit, spinning_line,
 displayHeader, displaySection, get_uptime, check_vpn, combined_tips,
 get_external_ip, check_password_strength, to_clipboard,get_network_connections,
 format_connections,get_network_interfaces, display_network_summary)
@@ -208,8 +209,13 @@ def main(device_type='desktop'):
                 else:
                     print(f"{RED} ** ALERT: Password verification failed. Try again. **{RESET}")
                     
-            except Exception:
+            except InvalidTag:
+                # Wrong key: the only failure that counts as a failed attempt.
                 print(f"{RED} ** ALERT: Incorrect access password. Try again. **{RESET}")
+            except Exception as e:
+                # Any other error (unreadable config, bad data) is not a failed
+                # login and must never count toward self-destruct.
+                safe_exit(f"Could not check the password ({safe_error(e)})")
 
             if login_successful:
                 # Reset attempts on successful login
@@ -274,8 +280,7 @@ def main(device_type='desktop'):
             try:
                 dataBase = loadDatabase(hashed_pass)
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to decrypt database: {safe_error(e)}. Self destructing... **{RESET}")
-                self_destruct()
+                safe_exit(f"Failed to open the vault after login ({safe_error(e)})")
 
             # Clean up sensitive data
             if 'entered_pass' in locals():
@@ -301,8 +306,8 @@ def main(device_type='desktop'):
         # This is a fallback in case the signal handler doesn't catch it
         interruptCleanup()
     except Exception as e:
-        print(f"{RED}** ALERT: Fatal error: {safe_error(e)}. Self destructing... **{RESET}")
-        self_destruct()
+        # Includes EOF (Ctrl+D) at a prompt. Never destroys the vault.
+        safe_exit(f"Unexpected error ({safe_error(e)})")
 
     # Normal exit - if we reach here, exit cleanly
     print(f"{GREEN}Thank you for using BUNKER. ZEROMARKS Dev Team!{RESET}")
@@ -430,8 +435,9 @@ def manage_passwords_and_notes(hashed_pass):
                     input(f"{GOLD}Press ENTER to continue...{RESET}")
 
     except Exception as e:
+        # Used to wipe the vault on any error here. Report and return; the
+        # caller exits normally and the vault is left untouched.
         print(f"{RED}** ALERT: Failed to manage database: {safe_error(e)} **{RESET}")
-        vault.secure_delete_on_failure()
         
     finally:
         # Secure cleanup of sensitive data

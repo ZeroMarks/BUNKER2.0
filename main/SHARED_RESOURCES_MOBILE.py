@@ -567,7 +567,9 @@ def wipe_sensitive_memory():
 
 def cleanup_temp_files():
     """Remove temporary files created during operation"""
-    temp_files = ["bunker.salt", "config.cfg.tmp", "vault.tmp"]
+    # Only true temporaries belong here. bunker.salt and Bunker.mmf are the
+    # vault itself: deleting them on exit makes the vault unrecoverable.
+    temp_files = ["config.cfg.tmp", "vault.tmp"]
     for file in temp_files:
         try:
             if os.path.exists(file):
@@ -583,10 +585,6 @@ def secure_cleanup_common():
         
         # Remove temporary files
         cleanup_temp_files()
-        
-        # Remove shared memory files if they exist
-        if os.path.exists("Bunker.mmf"):
-            os.remove("Bunker.mmf")
         
         # Clear any remaining vault data
         if hasattr(vault, 'clear_vault'):

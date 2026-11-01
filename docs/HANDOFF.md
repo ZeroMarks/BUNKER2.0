@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-01.
+you should not need anything else to start. Last updated 2026-10-31 (PT).
 
 ## 0. Vision and mandate
 
@@ -109,6 +109,9 @@ merge is `e53dde9`.
 - `28c5326` `BUNKER_NO_EMOJI`, and no crash on terminals that can't encode a character.
 - `70a5806` `BUNKER_CLIPBOARD_SECONDS`.
 
+**Privacy:**
+- `8e3ff26` System info screen: public IP looked up only after an explicit yes; local IP from the interface table, no request. `tests/test_system_info_network.py`.
+
 **Docs:**
 - `d72e0e4` `docs/THREAT_MODEL.md`.
 - `df1e805` `docs/RECOVERY.md`.
@@ -131,9 +134,8 @@ python3 -m unittest discover -s tests -t .
 python3 BUNKER.py   # interactive; needs a real terminal
 ```
 
-- **`hardening/v2.0` @ `869508b`:** 75 tests pass locally (Python 3.13).
-  - CI at `c5db28f` passed on Linux, macOS and Windows with Python 3.11–3.13, but the 3.10 jobs failed (the lock was missing `typing-extensions`).
-  - `869508b` fixes that. **Confirm the 3.10 jobs are green** on the PR before anything else.
+- **`hardening/v2.0` @ `8e3ff26`:** 80 tests pass locally (Python 3.13).
+  - CI at `1bf3591` is green on all 12 jobs (Linux, macOS, Windows × Python 3.10–3.13) plus the dependency audit. Re-check after the next push.
 - **`mobile/shared-vault` @ `e53dde9`:** 124 tests pass locally.
   - The last confirmed CI result was before the Windows fix `a696718`. Re-check the PR.
 - **CodeQL:** run locally with the 2.27.3 bundle, using the same suite as GitHub. 15 alerts on `desktop-latest`, 9 now, all triaged:
@@ -164,7 +166,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 ## 5. Open issues, risks, half-finished
 
-- **Python 3.10 CI** must be confirmed green after `869508b`; see §3.
+- **Network use** is limited to the optional public-IP features (IP display, off by default; System info after an explicit yes). Never describe BUNKER as making "no network calls"; say it works with the network off and makes no request unless asked to show the public IP. See `docs/THREAT_MODEL.md` §5.
 - **Multi-line note copies:** the clipboard fingerprint normalises line
   endings and trailing whitespace. A later copy by the user of the same
   text with different trailing whitespace would also be cleared. Low impact.
@@ -181,10 +183,11 @@ python3 BUNKER.py   # interactive; needs a real terminal
 4. Add a real pepper? `BUNKER_PEPPER` is defined but unused, and adding one would make existing vaults unreadable.
 5. Where should the README live? `Read Me/README.md` isn't shown on the repo page, and `main/README.md` duplicates it. A README redesign draft exists outside the repo and has not been committed.
 6. Review and merge #1, then #2. Then tag v2.0 and publish the release.
+7. Community files (issue forms, `SUPPORT.md`, `SECURITY.md`, `CONTRIBUTING.md` under `.github/`) are prepared on local branch `community/issue-templates` (off `main`, new files only; merge after #1 so their doc links resolve). Recommendation: accept issues only, no outside code PRs while the licence forbids modification. When private vulnerability reporting is on, point `SECURITY.md` at GitHub's "Report a vulnerability" button.
 
 ## 7. Next, ranked (each with its first step)
 
-1. **Make CI green on both PRs.** First step: open the checks on #1 and #2; if a 3.10 job fails, read its log for an unpinned or Python-version-specific dependency, add it to `requirements.txt` with a comment, regenerate the lock (command in its header), and verify with `pip download --python-version 3.10 --only-binary=:all: --no-deps`.
+1. **Keep CI green on both PRs** after each push, and merge `hardening/v2.0` into `mobile/shared-vault` after `8e3ff26` lands.
 2. **Fuzz the import parser** (`importNotes`, `importProfiles` in `main/DESKTOP.py`). First step: copy the responder pattern from `tests/test_backup_roundtrip.py`, feed mutated export files (reuse `mutate` from `tests/test_fuzz_vault_input.py`), and assert that the vault is unchanged or the import rejects cleanly.
 3. **Avoid duplicate entries on re-import.** Importing the same file twice currently adds every entry again. First step: write a test importing one export twice, then decide whether to skip or confirm.
 4. **Move desktop saves to `VAULT_STORE.save`** (after #2 merges). First step: `grep -n "write_bytes_atomic(\"Bunker.mmf\"" main/DESKTOP.py` and replace one site at a time, running `tests/test_desktop_flows.py`.

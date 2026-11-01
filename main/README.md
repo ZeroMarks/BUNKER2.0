@@ -96,6 +96,15 @@ On first run BUNKER walks you through creating a new vault and master password (
 
 **Your vault files** live in the folder you run BUNKER from: `Bunker.mmf` (encrypted vault), `bunker.salt` and `bunker.cfg`. You need all of them to open the vault. They are git-ignored so you can't commit them by accident.
 
+### Plain output (no colours)
+
+BUNKER follows the [NO_COLOR](https://no-color.org) convention. To turn
+colours off, for example for a screen reader or a log, set `NO_COLOR`:
+
+```bash
+NO_COLOR=1 python3 BUNKER.py
+```
+
 ### Running the tests
 
 ```bash

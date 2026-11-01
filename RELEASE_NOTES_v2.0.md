@@ -26,6 +26,9 @@ a known limitation, it says so.
 - **Auto-logout** after a configurable period of inactivity.
 - **Failed-login limit.** After the configured number of wrong master
   passwords, the vault files are overwritten and deleted. There is no recovery.
+- **Plain output option.** Set `NO_COLOR=1` to run without colours
+  ([NO_COLOR](https://no-color.org) convention), useful with screen readers
+  and when logging.
 - **Optional public-IP display** and a network information screen.
 
 ## Security fixes in this release

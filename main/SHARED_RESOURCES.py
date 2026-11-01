@@ -1,5 +1,6 @@
 import sys, random, string, os, platform, gc,\
 pyperclip, requests, psutil, datetime, secrets
+from main.SECURE_IO import safe_error
 
 
 # ANSI escape codes for colored output
@@ -20,6 +21,10 @@ VINTAGE = "\033[31m"  # Vintage Red dark red ograngeish
 LPURPLE = "\033[94m"  # light putple
 PURPLE = "\033[95m"  #
 CYAN = "\033[96m"  #
+# Accessibility: honour the NO_COLOR convention (https://no-color.org).
+# If NO_COLOR is set to any non-empty value, print without ANSI colours.
+if os.environ.get("NO_COLOR"):
+    L_CYAN = BUNKER = DBLUE = FORANGE = FBLUE = FRED = GOLD = GREEN = RED = RESET = DPURPLE = MUSTARD = VINTAGE = LPURPLE = PURPLE = CYAN = ""
 
 #ART
 
@@ -366,7 +371,7 @@ def spinning_line(duration, message="Checking Files for tampering...", color=GOL
 
         clear_screen()
         print(title_art)
-        print(f"{CYAN}Checking Filese{RESET}")
+        print(f"{CYAN}Checking Files{RESET}")
         print(divider)
         # More visually appealing spinner characters
         spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -434,7 +439,7 @@ def spinning_line(duration, message="Checking Files for tampering...", color=GOL
         time.sleep(duration)
         clear_screen()
         # Optionally log the error
-        # print(f"{RED}Animation error: {str(e)}{RESET}")
+        # print(f"{RED}Animation error: {safe_error(e)}{RESET}")
 
 def get_config_paths():
     """Get all possible config file paths"""
@@ -460,17 +465,39 @@ def get_config_paths():
                 
     return paths
 
+def safe_exit(message, code=1):
+    """Leave BUNKER after an error WITHOUT touching the vault.
+
+    Policy: the vault is only ever destroyed by self_destruct() when the
+    failed-login limit is reached. Crashes, errors, EOF, Ctrl+C and
+    timeouts must end here (or in the timeout/interrupt cleanups) instead.
+    """
+    print(f"{RED}** ALERT: {message} **{RESET}")
+    print(f"{CYAN}BUNKER closed. Your vault files were not changed.{RESET}")
+    print(f"{CYAN}What to do next: docs/RECOVERY.md{RESET}")
+    try:
+        from main.SHARED_RESOURCES_MOBILE import secure_cleanup_common
+        secure_cleanup_common()
+    except Exception:
+        pass
+    sys.exit(code)
+
+
 def self_destruct():
-    """Securely delete all sensitive files with multiple overwrite passes and trash bin bypass"""
+    """Destroy the vault. Only called when the failed-login limit is reached.
+
+    Securely deletes all sensitive files with multiple overwrite passes."""
     # Updated list of sensitive files
     sensitive_files = [
-        "Bunker.mmf", 
-        "bunker.cfg", 
-        "bunker.salt",     
-        "config.cfg",   
-        ".vault_config",   
-        "*.bak.*"         
-
+        "Bunker.mmf",
+        "bunker.cfg",
+        "bunker.salt",
+        "config.cfg",
+        "bunker.chk",
+        ".vault_config",
+        "*.bak.*",        # overwrite_db backups (patterns are expanded below)
+        "*.prev",         # copies kept during a master password change
+        ".bunker-*.tmp",  # leftovers from an interrupted atomic write
     ]
     
     print(f"{GOLD}Self-destruct initiated. Searching for sensitive files...{RESET}")
@@ -486,8 +513,15 @@ def self_destruct():
                 os.path.join("config", file_name) if os.path.exists("config") else None
             ]
             
-            # Filter out None values
-            paths_to_check = [p for p in paths_to_check if p]
+            # Filter out None values; expand patterns; never follow symlinks
+            # (overwriting through one would damage a file elsewhere).
+            import glob
+            expanded = []
+            for p in paths_to_check:
+                if not p:
+                    continue
+                expanded.extend(glob.glob(p) if any(c in p for c in "*?[") else [p])
+            paths_to_check = [p for p in expanded if not os.path.islink(p)]
             
             for path in paths_to_check:
                 if os.path.exists(path):
@@ -531,10 +565,10 @@ def self_destruct():
                             os.remove(path)
                             deleted_count += 1
                         except Exception as inner_e:
-                            print(f"{RED}Failed to delete {path}: {str(inner_e)}{RESET}")
+                            print(f"{RED}Failed to delete {path}: {safe_error(inner_e)}{RESET}")
                 
     except Exception as e:
-        print(f"{RED}Error during self-destruct: {str(e)}{RESET}")
+        print(f"{RED}Error during self-destruct: {safe_error(e)}{RESET}")
     finally:
         # Enhanced memory wiping
         gc.collect()
@@ -558,34 +592,21 @@ def displayHeader(title):
 
 
 ###Helpers
-# Function to clear clipboard after a specified delay
-def clear_clipboard(delay):
-    """Clear clipboard after specified delay with error handling"""
-    try:
-        time.sleep(delay)
-        pyperclip.copy("")
-    except Exception as e:
-        print(f"{RED}Error clearing clipboard: {str(e)}{RESET}")
+# Clipboard handling lives in SECURE_IO so there is one timer and one rule:
+# copied secrets are cleared after CLIPBOARD_CLEAR_SECONDS (default 30) and
+# when BUNKER exits.
+def clear_clipboard(delay=0):
+    """Clear the clipboard now if it still holds a secret BUNKER copied."""
+    from main.SECURE_IO import clear_clipboard_if_ours
+    return clear_clipboard_if_ours()
 
 
-# Function to copy input to clipboard and start timer to clear clipboard
 def to_clipboard(input_to_copy):
-    """Copy data to clipboard with auto-clear timer and enhanced security"""
-    try:
-        # Convert input to string and copy to clipboard
-        pyperclip.copy(str(input_to_copy))
-        
-        # Create daemon thread to clear clipboard after delay
-        clear_thread = threading.Thread(
-            target=clear_clipboard, 
-            args=(30,),
-            daemon=True  # Make thread daemon so it won't prevent program exit
-        )
-        clear_thread.start()
-        
-        return f"{GREEN}\n** SUCCESS: Password was saved to clipboard. It will be removed from your clipboard after 30 seconds. **{RESET}"
-    except Exception as e:
-        return f"{RED}\n** ALERT: Failed to copy to clipboard: {str(e)} **{RESET}"
+    """Copy a secret to the clipboard with auto-clear. Returns a status message."""
+    from main.SECURE_IO import copy_secret, copy_notice
+    if copy_secret(input_to_copy):
+        return f"{GREEN}\n** SUCCESS: {copy_notice('Password')} **{RESET}"
+    return f"{RED}\n** ALERT: Failed to copy to clipboard. **{RESET}"
 
 
 # SYSTEM INFORMATION FUNCTIONS
@@ -608,7 +629,7 @@ def get_uptime():
             return f"{minutes} minutes, {seconds} seconds"
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error fetching system uptime: {str(e)}{RESET}")
+        print(f"{RED}Error fetching system uptime: {safe_error(e)}{RESET}")
         return "Unknown"
 
 
@@ -642,7 +663,7 @@ def check_vpn():
         
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error checking VPN status: {str(e)}{RESET}")
+        print(f"{RED}Error checking VPN status: {safe_error(e)}{RESET}")
         return False
 
 
@@ -674,7 +695,7 @@ def get_external_ip():
         
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error fetching external IP: {str(e)}{RESET}")
+        print(f"{RED}Error fetching external IP: {safe_error(e)}{RESET}")
         return "Unknown"
     
     
@@ -685,7 +706,7 @@ def get_network_interfaces():
         # Filter out loopback interfaces for security
         return {k: v for k, v in interfaces.items() if not k.startswith('lo')}
     except Exception as e:
-        print(f"{RED}Error fetching network interfaces: {str(e)}{RESET}")
+        print(f"{RED}Error fetching network interfaces: {safe_error(e)}{RESET}")
         return {}
 
 
@@ -714,7 +735,7 @@ def get_network_connections(timeout=5):
         # More helpful error message with instructions
         return None, "Permission denied. Try running with administrator/root privileges."
     except Exception as e:
-        return None, f"Error: {str(e)}"
+        return None, f"Error: {safe_error(e)}"
 
 
 def format_connections(connections, detailed=False):
@@ -759,7 +780,7 @@ def format_connections(connections, detailed=False):
         return formatted_connections
         
     except Exception as e:
-        return [f"{RED}Error formatting connections: {str(e)}{RESET}"]
+        return [f"{RED}Error formatting connections: {safe_error(e)}{RESET}"]
 
 
 def display_network_summary(connections):
@@ -805,7 +826,7 @@ def display_network_summary(connections):
                 print(f"   - {ip}: {count} connection{'s' if count > 1 else ''}")
                 
     except Exception as e:
-        print(f"{RED}Error displaying network summary: {str(e)}{RESET}")
+        print(f"{RED}Error displaying network summary: {safe_error(e)}{RESET}")
 
 
 
@@ -1036,7 +1057,7 @@ def combined_tips(feedback):
         
     except Exception as e:
         # Return a basic set of tips if there's an error
-        print(f"{RED}Error generating password tips: {str(e)}{RESET}")
+        print(f"{RED}Error generating password tips: {safe_error(e)}{RESET}")
         return [
             "Use a mix of uppercase letters, lowercase letters, numbers, and symbols.",
             "Make your password at least 12 characters long.",
@@ -1123,7 +1144,7 @@ def generate_password(length=12, allowed_symbols="~!@#$%^&*_-+=`", enhanced=True
             
     except Exception as e:
         # Fallback to a simpler but still secure method if there's an error
-        print(f"{RED}Error generating password: {str(e)}{RESET}")
+        print(f"{RED}Error generating password: {safe_error(e)}{RESET}")
         
         # Simple fallback method
         chars = string.ascii_letters + string.digits + "!@#$%^&*"

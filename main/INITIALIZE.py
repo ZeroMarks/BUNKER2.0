@@ -1,7 +1,8 @@
 import base64, json, sys, getpass, os, gc, random, string, \
-platform, subprocess, threading, time, pyperclip, signal,time,datetime
+platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
+from main.SECURE_IO import safe_error, write_private_bytes
 
-from typing import Optional
+from typing import Optional, Dict, Any, Tuple, Union, List
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -10,7 +11,6 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
 from argon2.low_level import hash_secret_raw, Type
 from queue import Queue
-from inputimeout import inputimeout, TimeoutOccurred
 from cryptography.fernet import Fernet
 
 # Import other necessary functions
@@ -18,10 +18,17 @@ from main.SHARED_RESOURCES import (clear_screen, title_art, subwm,
 divider, nuke_art, nuke_text, check_terminal_size, self_destruct,
 displayHeader,)
 
-# Constants
-from main.SHARED_RESOURCES import (L_CYAN, BUNKER, DBLUE, 
-FORANGE, FBLUE, FRED, GOLD, GREEN, RED, RESET, DPURPLE,
-MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN )
+# Import shared vault functions and constants from mobile resources
+from main.SHARED_RESOURCES_MOBILE import (
+    L_CYAN, BUNKER, DBLUE, FORANGE, FBLUE, FRED, GOLD, GREEN, RED, RESET,
+    DPURPLE, MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN,
+    # Vault functions
+    derive_system_key, save_ui_config, load_ui_config,
+    secure_cleanup_common, SecureVaultEnhanced, vault,
+    # Timeout and setup functions
+    timeoutInput, timeoutCleanup, timeout_getpass, setup_timeout,
+    verify_setup, vaultSetup, timeoutGlobalCode
+)
 
 ###BUNKER HELPERS###
 
@@ -119,7 +126,7 @@ class SecureVaultEnhanced:
             return key
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Key generation failed: {str(e)}")
+            raise ValueError(f"Key generation failed: {safe_error(e)}")
 
 
     
@@ -153,7 +160,7 @@ class SecureVaultEnhanced:
             
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Key derivation failed: {str(e)}")
+            raise ValueError(f"Key derivation failed: {safe_error(e)}")
               
     # Add compatibility methods for import/export operations
 
@@ -190,7 +197,7 @@ class SecureVaultEnhanced:
             raise FileNotFoundError(f"File not found: {filename}")
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Failed to load {filename}: {str(e)}") 
+            raise ValueError(f"Failed to load {filename}: {safe_error(e)}") 
     
     def verify_password_enhanced(self, password, salt, verifier):
         """Verify password using config data"""
@@ -214,17 +221,12 @@ class SecureVaultEnhanced:
             # Encrypt the data
             encrypted_data = self.encrypt_data(data, key)
             
-            # Write to file as bytes
-            with open(filename, 'wb') as f:
-                f.write(encrypted_data)
-                
-            # Set proper permissions on Unix-like systems
-            if os.name == 'posix':
-                os.chmod(filename, 0o600)
+            # Atomic, owner-only write
+            write_private_bytes(filename, encrypted_data)
                 
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Failed to save {filename}: {str(e)}")
+            raise ValueError(f"Failed to save {filename}: {safe_error(e)}")
         
     def secure_delete_on_failure(self):
         """Securely delete all sensitive files"""
@@ -303,29 +305,26 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("timeout_value", 60)
         except Exception as e:
-            raise ValueError(f"Failed to manage timeout: {str(e)}")
+            raise ValueError(f"Failed to manage timeout: {safe_error(e)}")
 
     def load_timeout_value(hashed_pass):
-        """Load timeout value using a temporary key approach"""
+        """Load timeout value using shared UI config"""
         try:
-            # This is a simplified approach for loading timeout without full authentication
-            # In practice, you should always use the user's password-derived key
-            #temp
-            #config = vault.manage_config(hashed_pass)
-            #return config.get("timeout_value", 60)
+            # Use shared load_ui_config from SHARED_RESOURCES_MOBILE
             ui_config = load_ui_config()
             return ui_config.get("current_timeout", 60)
         except Exception as e:
             print(f"{GOLD}Warning: Could not load timeout value. Using default.{RESET}")
-            return 60
+            return 60    
         
     def manage_max_attempts(self, key):
+
         """Handle maximum attempts operations"""
         try:
             config = self.load_config(key)
             return config.get("max_attempts", 3)  # Default to 3 attempts
         except Exception as e:
-            raise ValueError(f"Failed to get max attempts: {str(e)}")
+            raise ValueError(f"Failed to get max attempts: {safe_error(e)}")
 
     def manage_last_exit(self, key, new_timestamp=None):
         """Handle last exit timestamp operations"""
@@ -337,7 +336,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("last_exit", None)
         except Exception as e:
-            raise ValueError(f"Failed to manage last exit: {str(e)}")
+            raise ValueError(f"Failed to manage last exit: {safe_error(e)}")
 
     def manage_config(self, hashed_pass, **updates):
         """Central function for all config operations"""
@@ -354,7 +353,7 @@ class SecureVaultEnhanced:
             
             return config
         except Exception as e:
-            raise ValueError(f"Failed to manage config: {str(e)}")
+            raise ValueError(f"Failed to manage config: {safe_error(e)}")
 
 
     def manage_settings(self, key, settings=None):
@@ -367,7 +366,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("settings", {"disable_ipv4": True})
         except Exception as e:
-            raise ValueError(f"Failed to manage settings: {str(e)}")
+            raise ValueError(f"Failed to manage settings: {safe_error(e)}")
 
     # Combined function for attempts management:
     def manage_attempts(self, key, new_attempts=None):
@@ -380,7 +379,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("attempts", 0)
         except Exception as e:
-            raise ValueError(f"Failed to manage attempts: {str(e)}")
+            raise ValueError(f"Failed to manage attempts: {safe_error(e)}")
 
     def save_config(self, config_data, hashed_pass):
         """Save configuration data (always encrypted)"""
@@ -388,12 +387,11 @@ class SecureVaultEnhanced:
             # Encrypt the config dict as JSON using the provided key
             json_bytes = json.dumps(config_data).encode()
             encrypted = self.encrypt_data(json_bytes, hashed_pass)
-            with open(self.config_file, "wb") as f:
-                f.write(encrypted)
-            if os.name == 'posix':
-                os.chmod(self.config_file, 0o600)
+            # Atomic, owner-only, and keeps bunker.chk in step (VAULT_FILES)
+            from main.VAULT_FILES import write_config
+            write_config(encrypted)
         except Exception as e:
-            raise ValueError(f"Failed to save config: {str(e)}")
+            raise ValueError(f"Failed to save config: {safe_error(e)}")
 
     def load_config(self, hashed_pass):
         """Load configuration data (always decrypted)"""
@@ -404,25 +402,13 @@ class SecureVaultEnhanced:
             decrypted = self.decrypt_data(encrypted, hashed_pass)
             return json.loads(decrypted.decode())
         except FileNotFoundError:
-            return self.create_default_config(key=hashed_pass)
+            # Used to write a fresh config with a random salt and an empty
+            # verifier here, which made the vault impossible to open on the
+            # next login. A missing bunker.cfg is an error to report.
+            raise ValueError("bunker.cfg is missing")
         except Exception as e:
-            raise ValueError(f"Failed to load config: {str(e)}")
+            raise ValueError(f"Failed to load config: {safe_error(e)}")
 
-    def create_default_config(self, key):
-        """Create default configuration with all necessary values"""
-        config = {
-            "salt": base64.b64encode(os.urandom(SALT_SIZE)).decode(),
-            "verifier": "",
-            #temp
-            #"timeout_value": 60,
-            #"max_attempts": 3,
-            #"settings": {"disable_ipv4": True},
-            #"attempts": 0,
-            "last_exit": str(datetime.datetime.now().timestamp()),
-            "timestamp": str(time.time())
-        }
-        self.save_config(config, key)
-        return config
         
 
 timeoutGlobalCode = "*TIMEOUT*"
@@ -454,7 +440,7 @@ def overwrite_db(new_contents):
                     os.chmod(backup_name, 0o600)
                 print(f"{GOLD}Created backup: {backup_name}{RESET}")
         except Exception as e:
-            print(f"{RED}Warning: Failed to create backup: {str(e)}{RESET}")
+            print(f"{RED}Warning: Failed to create backup: {safe_error(e)}{RESET}")
         
         # Ensure new_contents is in the correct format (bytes)
         if isinstance(new_contents, str):
@@ -480,7 +466,7 @@ def overwrite_db(new_contents):
         return True
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to overwrite database: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to overwrite database: {safe_error(e)} **{RESET}")
         
         # Try to restore from backup if write failed
         try:
@@ -535,7 +521,7 @@ def generate_export_encryption(passphrase):
         return fernet_key, salt, verifier
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to generate export encryption: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to generate export encryption: {safe_error(e)} **{RESET}")
         return None, None, None
       
 def verify_export_encryption(passphrase, salt, verifier):
@@ -576,8 +562,7 @@ def verify_export_encryption(passphrase, salt, verifier):
             return None
         
     except Exception as e:
-        # Log the error but don't expose it to the user
-        print(f"{RED}** DEBUG: Verification failed: {str(e)} **{RESET}")
+        # Verification failure is reported by the caller; no details here.
         return None
 
 def load_encrypted_file(filename, hashed_pass):
@@ -594,44 +579,398 @@ def load_encrypted_file(filename, hashed_pass):
     except FileNotFoundError:
         raise ValueError(f"File not found: {filename}")
     except Exception as e:
-        raise ValueError(f"Failed to load {filename}: {str(e)}")
+        raise ValueError(f"Failed to load {filename}: {safe_error(e)}")
 
-def timeoutInput(caption, timeout=60, hashed_pass=None):
-    """Handle timeout input with enhanced security"""
-    try:
-        user_input = inputimeout(prompt=caption, timeout=timeout)
-    except TimeoutOccurred:
-        user_input = timeoutGlobalCode
-        timeoutCleanup()
-    return user_input
-
+# timeoutInput(), timeoutCleanup(), timeout_getpass(), and setup_timeout() are now imported from SHARED_RESOURCES_MOBILE
 
 PEPPER = os.environ.get("BUNKER_PEPPER", "default_pepper_value")
 
-def load_ui_config(hashed_pass=None):
-    try:
-        key = hashed_pass or b"0"*32  # Replace with a real key if possible
-        with open("config.cfg", "rb") as f:
-            encrypted = f.read()
-        decrypted = vault.decrypt_data(encrypted, key)
-        return json.loads(decrypted.decode("utf-8"))
-    except Exception:
-            # Self-destruct if config.cfg is missing or corrupted
-            print(f"{RED}** ALERT: UI config file missing or corrupted. Self-destructing... **{RED}")
-            self_destruct()
-            sys.exit(1)
+# Cross-platform UI key management functions
+def generate_ui_key() -> bytes:
+    """Generate a cryptographically secure 32-byte UI key"""
+    return os.urandom(32)
+
+# derive_system_key() is now imported from SHARED_RESOURCES_MOBILE
+
+def get_ui_key() -> Optional[bytes]:
+    """Retrieve UI key from platform-specific secure storage"""
+    system = platform.system()
     
-def save_ui_config(config, hashed_pass=None):
-    # If you have the password/key, use it; otherwise, use a static key for now
-    key = hashed_pass or b"0"*32  # Replace with a real key if possible
-    data = json.dumps(config).encode("utf-8")
-    encrypted = vault.encrypt_data(data, key)
-    with open("config.cfg", "wb") as f:
-        f.write(encrypted)
+    try:
+        if system == "Darwin":  # macOS
+            return _get_ui_key_macos()
+        elif system == "Windows":
+            return _get_ui_key_windows()
+        else:  # Linux and other Unix-like systems
+            return _get_ui_key_linux()
+    except Exception as e:
+        print(f"{GOLD}Warning: Could not retrieve UI key from secure storage: {safe_error(e)}{RESET}")
+        return None
+
+def set_ui_key(key: bytes) -> bool:
+    """Store UI key in platform-specific secure storage"""
+    system = platform.system()
+    
+    try:
+        if system == "Darwin":  # macOS
+            return _set_ui_key_macos(key)
+        elif system == "Windows":
+            return _set_ui_key_windows(key)
+        else:  # Linux and other Unix-like systems
+            return _set_ui_key_linux(key)
+    except Exception as e:
+        print(f"{RED}Error: Could not store UI key in secure storage: {safe_error(e)}{RESET}")
+        return False
+
+def get_ui_meta() -> Optional[Dict[str, Any]]:
+    """Retrieve UI metadata from platform-specific secure storage"""
+    system = platform.system()
+    
+    try:
+        if system == "Darwin":  # macOS
+            return _get_ui_meta_macos()
+        elif system == "Windows":
+            return _get_ui_meta_windows()
+        else:  # Linux and other Unix-like systems
+            return _get_ui_meta_linux()
+    except Exception as e:
+        print(f"{GOLD}Warning: Could not retrieve UI metadata: {safe_error(e)}{RESET}")
+        return None
+
+def set_ui_meta(metadata: Dict[str, Any]) -> bool:
+    """Store UI metadata in platform-specific secure storage"""
+    system = platform.system()
+    
+    try:
+        if system == "Darwin":  # macOS
+            return _set_ui_meta_macos(metadata)
+        elif system == "Windows":
+            return _set_ui_meta_windows(metadata)
+        else:  # Linux and other Unix-like systems
+            return _set_ui_meta_linux(metadata)
+    except Exception as e:
+        print(f"{RED}Error: Could not store UI metadata: {safe_error(e)}{RESET}")
+        return False
+
+# macOS implementation using Keychain Services
+def _get_ui_key_macos() -> Optional[bytes]:
+    """Retrieve UI key from macOS Keychain"""
+    try:
+        result = subprocess.run([
+            'security', 'find-generic-password',
+            '-s', 'bunker-ui-key',
+            '-a', 'bunker-app',
+            '-w'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0:
+            key_b64 = result.stdout.strip()
+            return base64.urlsafe_b64decode(key_b64)
+        return None
+    except Exception:
+        return None
+
+def _set_ui_key_macos(key: bytes) -> bool:
+    """Store UI key in macOS Keychain"""
+    try:
+        key_b64 = base64.urlsafe_b64encode(key).decode('utf-8')
+        
+        # Delete existing key first
+        subprocess.run([
+            'security', 'delete-generic-password',
+            '-s', 'bunker-ui-key',
+            '-a', 'bunker-app'
+        ], capture_output=True, check=False)
+        
+        # Add new key
+        result = subprocess.run([
+            'security', 'add-generic-password',
+            '-s', 'bunker-ui-key',
+            '-a', 'bunker-app',
+            '-w', key_b64,
+            '-U'  # Update if exists
+        ], capture_output=True, check=False)
+        
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def _get_ui_meta_macos() -> Optional[Dict[str, Any]]:
+    """Retrieve UI metadata from macOS Keychain"""
+    try:
+        result = subprocess.run([
+            'security', 'find-generic-password',
+            '-s', 'bunker-ui-meta',
+            '-a', 'bunker-app',
+            '-w'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0:
+            meta_b64 = result.stdout.strip()
+            meta_json = base64.urlsafe_b64decode(meta_b64).decode('utf-8')
+            return json.loads(meta_json)
+        return None
+    except Exception:
+        return None
+
+def _set_ui_meta_macos(metadata: Dict[str, Any]) -> bool:
+    """Store UI metadata in macOS Keychain"""
+    try:
+        meta_json = json.dumps(metadata)
+        meta_b64 = base64.urlsafe_b64encode(meta_json.encode('utf-8')).decode('utf-8')
+        
+        # Delete existing metadata first
+        subprocess.run([
+            'security', 'delete-generic-password',
+            '-s', 'bunker-ui-meta',
+            '-a', 'bunker-app'
+        ], capture_output=True, check=False)
+        
+        # Add new metadata
+        result = subprocess.run([
+            'security', 'add-generic-password',
+            '-s', 'bunker-ui-meta',
+            '-a', 'bunker-app',
+            '-w', meta_b64,
+            '-U'  # Update if exists
+        ], capture_output=True, check=False)
+        
+        return result.returncode == 0
+    except Exception:
+        return False
+
+# Windows implementation using Credential Manager
+def _get_ui_key_windows() -> Optional[bytes]:
+    """Retrieve UI key from Windows Credential Manager"""
+    try:
+        result = subprocess.run([
+            'powershell', '-Command',
+            '$cred = Get-StoredCredential -Target "bunker-ui-key" -ErrorAction SilentlyContinue; if ($cred) { $cred.Password }'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            key_b64 = result.stdout.strip()
+            return base64.urlsafe_b64decode(key_b64)
+        return None
+    except Exception:
+        return None
+
+def _set_ui_key_windows(key: bytes) -> bool:
+    """Store UI key in Windows Credential Manager"""
+    try:
+        key_b64 = base64.urlsafe_b64encode(key).decode('utf-8')
+        
+        # Use cmdkey to store the credential
+        result = subprocess.run([
+            'cmdkey', '/generic:bunker-ui-key',
+            '/user:bunker-app',
+            f'/pass:{key_b64}'
+        ], capture_output=True, check=False)
+        
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def _get_ui_meta_windows() -> Optional[Dict[str, Any]]:
+    """Retrieve UI metadata from Windows Credential Manager"""
+    try:
+        result = subprocess.run([
+            'powershell', '-Command',
+            '$cred = Get-StoredCredential -Target "bunker-ui-meta" -ErrorAction SilentlyContinue; if ($cred) { $cred.Password }'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            meta_b64 = result.stdout.strip()
+            meta_json = base64.urlsafe_b64decode(meta_b64).decode('utf-8')
+            return json.loads(meta_json)
+        return None
+    except Exception:
+        return None
+
+def _set_ui_meta_windows(metadata: Dict[str, Any]) -> bool:
+    """Store UI metadata in Windows Credential Manager"""
+    try:
+        meta_json = json.dumps(metadata)
+        meta_b64 = base64.urlsafe_b64encode(meta_json.encode('utf-8')).decode('utf-8')
+        
+        # Use cmdkey to store the credential
+        result = subprocess.run([
+            'cmdkey', '/generic:bunker-ui-meta',
+            '/user:bunker-app',
+            f'/pass:{meta_b64}'
+        ], capture_output=True, check=False)
+        
+        return result.returncode == 0
+    except Exception:
+        return False
+
+# Linux implementation using Secret Service with encrypted file fallback
+def _get_ui_key_linux() -> Optional[bytes]:
+    """Retrieve UI key from Linux Secret Service or encrypted file fallback"""
+    # Try Secret Service first
+    try:
+        result = subprocess.run([
+            'secret-tool', 'lookup',
+            'service', 'bunker-ui-key',
+            'account', 'bunker-app'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            key_b64 = result.stdout.strip()
+            return base64.urlsafe_b64decode(key_b64)
+    except Exception:
+        pass
+    
+    # Fallback to encrypted file
+    return _get_ui_key_linux_file()
+
+def _set_ui_key_linux(key: bytes) -> bool:
+    """Store UI key in Linux Secret Service or encrypted file fallback"""
+    key_b64 = base64.urlsafe_b64encode(key).decode('utf-8')
+    
+    # Try Secret Service first
+    try:
+        result = subprocess.run([
+            'secret-tool', 'store',
+            '--label=Bunker UI Key',
+            'service', 'bunker-ui-key',
+            'account', 'bunker-app'
+        ], input=key_b64, text=True, capture_output=True, check=False)
+        
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+    
+    # Fallback to encrypted file
+    return _set_ui_key_linux_file(key)
+
+def _get_ui_meta_linux() -> Optional[Dict[str, Any]]:
+    """Retrieve UI metadata from Linux Secret Service or encrypted file fallback"""
+    # Try Secret Service first
+    try:
+        result = subprocess.run([
+            'secret-tool', 'lookup',
+            'service', 'bunker-ui-meta',
+            'account', 'bunker-app'
+        ], capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            meta_b64 = result.stdout.strip()
+            meta_json = base64.urlsafe_b64decode(meta_b64).decode('utf-8')
+            return json.loads(meta_json)
+    except Exception:
+        pass
+    
+    # Fallback to encrypted file
+    return _get_ui_meta_linux_file()
+
+def _set_ui_meta_linux(metadata: Dict[str, Any]) -> bool:
+    """Store UI metadata in Linux Secret Service or encrypted file fallback"""
+    meta_json = json.dumps(metadata)
+    meta_b64 = base64.urlsafe_b64encode(meta_json.encode('utf-8')).decode('utf-8')
+    
+    # Try Secret Service first
+    try:
+        result = subprocess.run([
+            'secret-tool', 'store',
+            '--label=Bunker UI Metadata',
+            'service', 'bunker-ui-meta',
+            'account', 'bunker-app'
+        ], input=meta_b64, text=True, capture_output=True, check=False)
+        
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+    
+    # Fallback to encrypted file
+    return _set_ui_meta_linux_file(metadata)
+
+# Linux encrypted file fallback implementation
+def _get_ui_key_linux_file() -> Optional[bytes]:
+    """Retrieve UI key from encrypted file (Linux fallback)"""
+    try:
+        key_file = os.path.expanduser('~/.bunker_ui_key')
+        if not os.path.exists(key_file):
+            return None
+        
+        system_key = derive_system_key()
+        
+        with open(key_file, 'rb') as f:
+            encrypted_data = f.read()
+        
+        # Simple XOR encryption with system key
+        decrypted = bytearray()
+        for i, byte in enumerate(encrypted_data):
+            decrypted.append(byte ^ system_key[i % len(system_key)])
+        
+        return bytes(decrypted)
+    except Exception:
+        return None
+
+def _set_ui_key_linux_file(key: bytes) -> bool:
+    """Store UI key in encrypted file (Linux fallback)"""
+    try:
+        key_file = os.path.expanduser('~/.bunker_ui_key')
+        system_key = derive_system_key()
+        
+        # Simple XOR encryption with system key
+        encrypted = bytearray()
+        for i, byte in enumerate(key):
+            encrypted.append(byte ^ system_key[i % len(system_key)])
+        
+        write_private_bytes(key_file, bytes(encrypted))
+        return True
+    except Exception:
+        return False
+
+def _get_ui_meta_linux_file() -> Optional[Dict[str, Any]]:
+    """Retrieve UI metadata from encrypted file (Linux fallback)"""
+    try:
+        meta_file = os.path.expanduser('~/.bunker_ui_meta')
+        if not os.path.exists(meta_file):
+            return None
+        
+        system_key = derive_system_key()
+        
+        with open(meta_file, 'rb') as f:
+            encrypted_data = f.read()
+        
+        # Simple XOR encryption with system key
+        decrypted = bytearray()
+        for i, byte in enumerate(encrypted_data):
+            decrypted.append(byte ^ system_key[i % len(system_key)])
+        
+        meta_json = decrypted.decode('utf-8')
+        return json.loads(meta_json)
+    except Exception:
+        return None
+
+def _set_ui_meta_linux_file(metadata: Dict[str, Any]) -> bool:
+    """Store UI metadata in encrypted file (Linux fallback)"""
+    try:
+        meta_file = os.path.expanduser('~/.bunker_ui_meta')
+        system_key = derive_system_key()
+        
+        meta_json = json.dumps(metadata).encode('utf-8')
+        
+        # Simple XOR encryption with system key
+        encrypted = bytearray()
+        for i, byte in enumerate(meta_json):
+            encrypted.append(byte ^ system_key[i % len(system_key)])
+        
+        write_private_bytes(meta_file, bytes(encrypted))
+        return True
+    except Exception:
+        return False
+
+# load_ui_config() is now imported from SHARED_RESOURCES_MOBILE
+    
+# save_ui_config() is now imported from SHARED_RESOURCES_MOBILE
 
 def save_salt(salt, filename="bunker.salt"):
-    with open(filename, "wb") as f:
-        f.write(salt)
+    write_private_bytes(filename, salt)
 
 def load_salt(filename="bunker.salt"):
     with open(filename, "rb") as f:
@@ -641,49 +980,7 @@ def generate_salt(length=32):
     return os.urandom(length)
 
  
-def secure_cleanup_common():
-    """
-    Common cleanup operations shared by all exit scenarios.
-    This handles the sensitive data cleanup without any user messaging.
-    """
-    try:
-        # Reset global variables
-        global cached_ip
-        cached_ip = None
-        
-        # Clear any active threads
-        try:
-            # Stop any running background threads
-            if 'ip_fetch_thread' in globals() and globals()['ip_fetch_thread'] is not None:
-                if hasattr(globals()['ip_fetch_thread'], 'do_run'):
-                    globals()['ip_fetch_thread'].do_run = False
-        except Exception:
-            # Silently handle thread cleanup errors
-            pass
-            
-        # Clear clipboard if it contains sensitive data
-        try:
-            pyperclip.copy("")
-        except Exception:
-            # Silently handle clipboard errors
-            pass
-            
-        # Secure memory cleanup
-        try:
-            # Create a vault instance for secure wiping
-            vault.secure_wipe()
-            
-            # Force garbage collection to clean up memory
-            import gc
-            gc.collect()
-        except Exception:
-            # Silently handle memory cleanup errors
-            pass
-            
-        return True
-    except Exception as e:
-        print(f"{RED}Error during common cleanup: {str(e)}{RESET}")
-        return False
+# secure_cleanup_common() is now imported from SHARED_RESOURCES_MOBILE
 
 def timeoutCleanup():
     """
@@ -691,11 +988,12 @@ def timeoutCleanup():
     Clears sensitive data from memory, displays a timeout message, and exits the program.
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display timeout message
         print(title_art)
@@ -711,7 +1009,7 @@ def timeoutCleanup():
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during timeout cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during timeout cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 def interruptCleanup():
@@ -720,11 +1018,12 @@ def interruptCleanup():
     Clears sensitive data from memory, displays an interrupt message, and exits the program.
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display interrupt message
         print(title_art)
@@ -743,7 +1042,7 @@ def interruptCleanup():
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during interrupt cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during interrupt cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 def errorCleanup(error_message="An unexpected error occurred"):
@@ -755,11 +1054,12 @@ def errorCleanup(error_message="An unexpected error occurred"):
         error_message: Specific error message to display
     """
     try:
+        # Run common cleanup first (clears the clipboard), so a failure in
+        # clear_screen() cannot skip it on the way to os._exit().
+        secure_cleanup_common()
+
         # Clear the screen to remove any sensitive information
         clear_screen()
-        
-        # Run common cleanup operations
-        secure_cleanup_common()
             
         # Display error message
         print(title_art)
@@ -778,7 +1078,7 @@ def errorCleanup(error_message="An unexpected error occurred"):
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during error cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during error cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 # Global keyboard interrupt handler
@@ -803,7 +1103,7 @@ def register_handlers():
             
         return True
     except Exception as e:
-        print(f"{RED}Warning: Could not register signal handlers: {str(e)}{RESET}")
+        print(f"{RED}Warning: Could not register signal handlers: {safe_error(e)}{RESET}")
         return False
 
 def setup_secure_exit_handlers():
@@ -823,7 +1123,7 @@ def setup_secure_exit_handlers():
             keyboard_interrupt_handler(None, None)
         else:
             # For other exceptions, use the error cleanup
-            errorCleanup(f"Unhandled exception: {str(exc_value)}")
+            errorCleanup(f"Unhandled exception: {safe_error(exc_value)}")
     
     sys.excepthook = custom_excepthook
 
@@ -834,7 +1134,7 @@ def getpass_thread(prompt, q):
         q.put(password)
     except Exception as e:
         # Put the error in the queue instead of the password
-        q.put(f"ERROR: {str(e)}")
+        q.put(f"ERROR: {safe_error(e)}")
 
 def timeout_getpass(prompt, timeout):
     """Get password with timeout and enhanced error handling"""
@@ -888,8 +1188,8 @@ def fileSetup(hashed_pass):
         
         return salt, verifier, database
     except Exception as e:
-        print(f"{RED}** ALERT: Error loading security files: {str(e)} **{RESET}")
-        self_destruct()
+        print(f"{RED}** ALERT: Error loading security files: {safe_error(e)} **{RESET}")
+        raise
 
 def saveDatabase(db, hashed_pass):
     """Save database with enhanced security"""
@@ -910,10 +1210,10 @@ def saveDatabase(db, hashed_pass):
                 last_modified=str(datetime.datetime.now().timestamp())
             )
         except Exception as e:
-            print(f"{GOLD}Warning: Could not update config last_modified: {str(e)}{RESET}")
+            print(f"{GOLD}Warning: Could not update config last_modified: {safe_error(e)}{RESET}")
         return True
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to save database: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to save database: {safe_error(e)} **{RESET}")
         return False
     
 def loadDatabase(hashed_pass):
@@ -929,9 +1229,9 @@ def loadDatabase(hashed_pass):
     try:
         # Check if database file exists
         if not os.path.exists("Bunker.mmf"):
-            print(f"{GOLD}Database file does not exist. Creating new empty database.{RESET}")
-            self_destruct()
-            return {}
+            # Used to call self_destruct() here, deleting the config and
+            # salt as well. A missing file is an error, not a reason to wipe.
+            raise FileNotFoundError("Bunker.mmf not found")
             
         # Read the encrypted database in binary mode
         with open("Bunker.mmf", "rb") as f:
@@ -950,8 +1250,8 @@ def loadDatabase(hashed_pass):
         return db
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to load database: {str(e)} **{RESET}")
-        raise ValueError(f"Database format is invalid: {str(e)}")
+        print(f"{RED}** ALERT: Failed to load database: {safe_error(e)} **{RESET}")
+        raise ValueError(f"Database format is invalid: {safe_error(e)}")
 def load_max_attempts(hashed_pass):
     """Load max attempts using manage_config"""
     try:
@@ -961,206 +1261,11 @@ def load_max_attempts(hashed_pass):
         print(f"{GOLD}Warning: Could not load max attempts. Using default value.{RESET}")
         return 3
 
-def setup_timeout() -> Optional[int]:
-    """Configure timeout settings"""
-    while True:
-        try:
-            timeout_choice = input(
-                f"{GOLD}Enter timeout value in seconds (10-3600, or 0 for no timeout. "
-                f"Press enter for recommended 60 seconds, .c to cancel): {RESET}"
-            )
-
-            if timeout_choice == ".c":
-                print(f"{GREEN}Operation cancelled...{RESET}")
-                return None
-
-            if timeout_choice.strip() == "":
-                return 60
-
-            timeout_value = int(timeout_choice)
-            if timeout_value == 0:
-                confirm = input(f"{RED}** WARNING: Are you sure you want to disable auto-logout? (y/n): {RESET}").lower()
-                if confirm != 'y':
-                    continue
-                return 0
-            elif 10 <= timeout_value <= 3600:
-                return timeout_value
-            else:
-                print(f"{RED}** ALERT: Timeout must be between 10 and 3600 seconds, or 0 for no timeout. **{RESET}")
-        except ValueError:
-            print(f"{RED}** ALERT: Please enter a valid number. **{RESET}")
+# setup_timeout() is now imported from SHARED_RESOURCES_MOBILE
   
-def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifier: bytes) -> bool:
-    """Verify the vault setup"""
-    try:
-        derived_key = vault.derive_key_hybrid(password, salt)
-        if not derived_key:
-            return False
-            
-        decrypted = vault.decrypt_data(verifier, derived_key)
-        # FIXED: Use the same verifier string as in vaultSetup
-        return decrypted == b"BUNKER_VERIFIED"
-    except Exception as e:
-        print(f"{RED}** ALERT: Verification failed: {str(e)} **{RESET}")
-        return False
+# verify_setup() is now imported from SHARED_RESOURCES_MOBILE
 
-def vaultSetup():
-    """Setup vault with enhanced security while maintaining original process"""
-    try:
-        while True:
-            setup_choice = input(f"\n{GOLD}Enter (.g) for simplified user guide, or (y/n) if you're ready to setup bunker password: {RESET}").lower()
-            if setup_choice == 'y':
-                break
-            elif setup_choice == 'n':
-                check_terminal_size()
-                clear_screen()
-                print(title_art)
-                print(subwm)
-                print(divider)
-                print(f"{GREEN}Exiting...{RESET}")
-                return False
-            elif setup_choice == '.g':
-                # Display user guide without requiring login
-                display_setup_guide()
-                continue
-            else:
-                print(f"{RED}** ALERT: Invalid input. Please enter y, n, or .g. **{RESET}")
-                continue
-
-        while True:
-            show_password_choice = input(f"{GOLD}Do you want to show your password? (y/n) or (.c) to cancel: {RESET}").lower()
-            if show_password_choice == 'y':
-                show_password = True
-                print(f"{RED}** ALERT: Your password will be shown as you type. **{RESET}")
-                password_provided = input(f"{GOLD}Enter Password: {RESET}")
-                if password_provided == '.c':
-                    print(f"{GREEN}Operation cancelled...{RESET}")
-                    return False
-                    
-                password_confirmation = input(f"{GOLD}Confirm password: {RESET}")
-                if password_confirmation == '.c':
-                    print(f"{GREEN}Operation cancelled...{RESET}")
-                    return False
-                    
-                if password_provided != password_confirmation:
-                    print(f"{RED}** ALERT: Passwords do not match. Please try again. **{RESET}")
-                    continue
-                    
-                if len(password_provided) < 8:
-                    print(f"{RED}** ALERT: Password must be at least 8 characters long. **{RESET}")
-                    continue
-                    
-                break
-                
-            elif show_password_choice == 'n':
-                show_password = False
-                password_provided = getpass.getpass(f"{GOLD}Enter Password: {RESET}")
-                if password_provided == '.c':
-                    print(f"{GREEN}Operation cancelled...{RESET}")
-                    return False
-                    
-                password_confirmation = getpass.getpass(f"{GOLD}Confirm password: {RESET}")
-                if password_confirmation == '.c':
-                    print(f"{GREEN}Operation cancelled...{RESET}")
-                    return False
-                    
-                if password_provided != password_confirmation:
-                    print(f"{RED}** ALERT: Passwords do not match. Please try again. **{RESET}")
-                    continue
-                    
-                if len(password_provided) < 8:
-                    print(f"{RED}** ALERT: Password must be at least 8 characters long. **{RESET}")
-                    continue
-                    
-                break
-                
-            elif show_password_choice == '.c':
-                print(f"{GREEN}Operation cancelled...{RESET}")
-                return False
-            else:
-                print(f"{RED}** ALERT: Invalid input. Please enter y, n, or .c. **{RESET}")
-                continue
-
-        try:
-            # Generate salt and save it separately
-            salt = os.urandom(SALT_SIZE)
-            save_salt(salt)
-
-            # Derive key using password + salt (+ optional pepper)
-            pepper = os.environ.get("BUNKER_PEPPER", "")
-            derived_key = vault.derive_key_hybrid(password_provided, salt, password_provided)
-            # Setup timeout with cancel option
-            timeout_value = setup_timeout()
-            if timeout_value is None:
-                print(f"{GREEN}Operation cancelled...{RESET}")
-                vault.secure_delete_on_failure()
-                return False
-
-            # Create initial config structure
-            config = {
-                "salt": base64.b64encode(salt).decode(),
-                "verifier": base64.b64encode(vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)).decode(),
-                #"timeout_value": timeout_value,
-                #"max_attempts": 3,
-                #"settings": {"disable_ipv4": True},
-                #"attempts": 0,
-                "last_exit": str(datetime.datetime.now().timestamp()),
-                "timestamp": str(time.time())
-            }
-            #temp tell untill we solve the encryption issue where 
-            #we need the password to get to decrypt config but cant acess it without the login
-            ui_config = {
-                "attempts": 0,
-                "max_attempts": 3,
-                "disable_ipv4": True,
-                "current_timeout": timeout_value
-            }
-            save_ui_config(ui_config)
-
-            # Encrypt and save config
-            encrypted_config = vault.encrypt_data(json.dumps(config).encode(), derived_key)
-            with open("bunker.cfg", "wb") as f:
-                f.write(encrypted_config)
-            if os.name == 'posix':
-                os.chmod("bunker.cfg", 0o600)
-
-            # Initialize empty database separately
-            empty_db = {}
-            if not saveDatabase(empty_db, derived_key):
-                raise ValueError("Failed to save initial database")
-
-            # Display success
-            clear_screen()
-            print(title_art)
-            print(subwm)
-            print(divider)
-
-            if timeout_value == 0:
-                print(f"{RED}** WARNING: Auto-logout is disabled **{RESET}")
-            else:
-                print(f"{GREEN}Auto-logout timer set to: {timeout_value} seconds{RESET}")
-
-            print(f"\n{GREEN}** SUCCESS: Vault setup complete! **{RESET}")
-            input(f"{GOLD}Press ENTER to continue: {RESET}")
-
-            time.sleep(0.5)
-            return True
-
-        except Exception as e:
-            print(f"{RED}** ALERT: Setup failed: {str(e)} **{RESET}")
-            vault.secure_delete_on_failure()
-            return False
-    except Exception as e:
-        print(f"{RED}** ALERT: Setup failed: {str(e)} **{RESET}")
-        vault.secure_delete_on_failure()
-        return False
-    finally:
-        # Secure cleanup
-        for var in ['password_provided', 'password_confirmation', 'derived_key', 'master_key']:
-            if var in locals():
-                del locals()[var]
-        vault.secure_wipe()
-             
+# vaultSetup() is now imported from SHARED_RESOURCES_MOBILE
 def main():
     """Main entry point"""
     check_terminal_size()
@@ -1188,8 +1293,8 @@ def display_setup_guide():
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker Setup Guide -----{RESET}\n\n"
-            f"{RESET}Our unique bunker-style approach guarantees that your saved data is automatically deleted if tampering is detected or any unauthorized changes are made. "
-            f"Additionally, the application will self-destruct after three incorrect password attempts, providing unparalleled protection.{RESET}\n\n"
+            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
@@ -1295,8 +1400,8 @@ def display_user_guide(hashed_pass, db):
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker User Guide -----{RESET}\n\n"
-            f"{RESET}Our unique bunker-style approach guarantees that your saved data is automatically deleted if tampering is detected or any unauthorized changes are made. "
-            f"Additionally, the application will self-destruct after three incorrect password attempts, providing unparalleled protection.{RESET}\n\n"
+            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
@@ -1385,7 +1490,7 @@ def display_user_guide(hashed_pass, db):
                 f"\n{RESET}Welcome to {CYAN}ZEROMARKSLLC{RESET}, where we prioritize your security and privacy with cutting-edge technologies and thoughtful features. Trust and security are woven into every line of code. We empower you with a robust platform to manage your sensitive information confidently and privately.\n\n{RESET}"
                 + f"{LPURPLE}Fortified Encryption Protocols{RESET}: Your data is shielded by advanced encryption algorithms that meet industry standards, ensuring it remains confidential and unreadable to unauthorized access.\n"
                 + f"\n{LPURPLE}Zero Exposure to Cloud Risks{RESET}: We champion your privacy by storing all sensitive information strictly on your local device. This approach eliminates vulnerabilities associated with cloud-based storage.\n"
-                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: Our application includes intelligent tamper detection. If any unauthorized attempt is detected, all stored data is instantly purged, safeguarding your information from breaches.\n"
+                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: After three incorrect master password attempts, all stored data is permanently deleted. Nothing else triggers this.\n"
                 + f"\n{LPURPLE}Innovative Password Management{RESET}: Enjoy hassle-free security with features like an auto-logout timer that activates after periods of inactivity and a robust password generator that crafts strong, unique passwords tailored to each account.\n"
                 + f"\n{LPURPLE}Secure Note Repository{RESET}: Store and manage important notes securely alongside passwords, ensuring easy access while maintaining the highest levels of data protection.\n"
                 + f"\n{LPURPLE}Continuous Vigilance{RESET}: We are committed to staying ahead of threats. Our team constantly updates our security protocols and application features to shield you from evolving cyber risks.\n\n"
@@ -1414,13 +1519,13 @@ def display_user_guide(hashed_pass, db):
                 f"{RESET}\nIf you encounter any issues or need further assistance, Here are the ways you can reach us:{RESET}\n\n"
                 + f"{MUSTARD}----- 💬 Support and Contact Information -----{RESET}\n\n"
                 + f"{MUSTARD}Email{RESET}: support@zeromarks.net\n"
-                + f"{MUSTARD}Website{RESET}: [www.zeromarks.net/support](http://www.zeromarks.net/support)\n\n"
+                + f"{MUSTARD}Website{RESET}: https://www.zeromarks.net\n\n"
                 + f"{RESET}For immediate assistance, please check our online resources:{RESET}\n\n"
                 + "\n".join(
                     [
-                        f"{MUSTARD}FAQs{RESET}: Visit our [Frequently Asked Questions](http://www.zeromarksllc.com/faqs) page for quick answers.",
-                        f"{MUSTARD}User Guide{RESET}: Explore our comprehensive [User Guide](http://www.zeromarksllc.com/user-guide) for detailed instructions.",
-                        f"{MUSTARD}Community Forum{RESET}: Join our [Community Forum](http://www.zeromarksllc.com/forum) to ask questions and share tips.",
+                        f"{MUSTARD}User Guide{RESET}: You're reading it. Open it any time from the MAIN MENU with (g).",
+                        f"{MUSTARD}README & Release Notes{RESET}: https://github.com/ZeroMarks/BUNKER2.0",
+                        f"{MUSTARD}Security issues{RESET}: email support@zeromarks.net (please don't post them publicly).",
                     ]
                 )
                 + "\n\n"
@@ -1430,14 +1535,14 @@ def display_user_guide(hashed_pass, db):
                 + "\n".join(
                     [
                         f"{GOLD}• {MUSTARD}\n**Other Media:** ",
-                        f"{GOLD}• {MUSTARD}[Website] |{RESET} http://www.zeromarks.net ",
+                        f"{GOLD}• {MUSTARD}[Website] |{RESET} https://www.zeromarks.net ",
                         f"{GOLD}• {MUSTARD}[Youtube] |{RESET} https://www.youtube.com/@ZEROMARKSLLC",
-                        f"{GOLD}• {MUSTARD}[Reddit] |{RESET} https://www.reddit.com/zeromarksllc",
-                        f"{GOLD}• {MUSTARD}[Github] |{RESET} https://www.github.com/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[Reddit] |{RESET} https://www.reddit.com/r/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[Github] |{RESET} https://github.com/ZeroMarks",
                         f"{GOLD}• {MUSTARD}\n **Social Media:** ",
                         f"{GOLD}• {MUSTARD}[Twitter / X] |{RESET} https://x.com/ZEROMARKSLLC",
                         f"{GOLD}• {MUSTARD}[Instagram] |{RESET} https://www.instagram.com/zeromarksllc",
-                        f"{GOLD}• {MUSTARD}[TikTok] |{RESET} https://www.tiktok.com/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[TikTok] |{RESET} https://www.tiktok.com/@zeromarksllc",
                         f"{GOLD}• {MUSTARD}[LinkedIn] |{RESET} https://www.linkedin.com/in/zeromarksllc",
                     ]
                 )
@@ -1527,9 +1632,8 @@ def display_user_guide(hashed_pass, db):
                 + f"{L_CYAN}We welcome contributions from the community. Here's how you can get involved:{RESET}\n\n"
                 + "\n".join(
                     [
-                        f"{GOLD}• {L_CYAN}Report Issues{RESET}: Found a bug? Report it on our [issue tracker](https://example.com/issues).",
-                        f"{GOLD}• {L_CYAN}Feature Requests{RESET}: Have a suggestion for a new feature? Submit it through our [feature request form](https://example.com/feature-request).",
-                        f"{GOLD}• {L_CYAN}Community Support{RESET}: Join our [community forum](https://example.com/forum) to help other users and share your ideas.",
+                        f"{GOLD}• {L_CYAN}Report Issues{RESET}: Found a bug? Open an issue at https://github.com/ZeroMarks/BUNKER2.0/issues (security issues: email support@zeromarks.net instead).",
+                        f"{GOLD}• {L_CYAN}Feature Requests{RESET}: Have a suggestion for a new feature? Open an issue at https://github.com/ZeroMarks/BUNKER2.0/issues.",
                     ]
                 )
                 + "\n\n"
@@ -1672,7 +1776,7 @@ def changeMasterPassword(hashed_pass, db):
 
             try:
                 # Derive key and check if it matches existing password
-                derived_key = vault.derive_key_hybrid(password_provided, current_salt)
+                derived_key = vault.derive_key_hybrid(password_provided, current_salt, password_provided)
                 if derived_key == hashed_pass:
                     print(f"{RED}\n ** ALERT: New password cannot be the same as the current password. **{RESET}")
                     while True:
@@ -1687,7 +1791,7 @@ def changeMasterPassword(hashed_pass, db):
                             print(f"{RED} ** ALERT: Invalid input. Please press 'enter' to continue or type 'r' to retry. **{RESET}")
                     continue
             except Exception as e:
-                print(f"{RED} ** ALERT: Error checking password: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error checking password: {safe_error(e)} **{RESET}")
                 return False
 
             # Generate new salt and key
@@ -1711,26 +1815,32 @@ def changeMasterPassword(hashed_pass, db):
                 config["last_exit"] = str(datetime.datetime.now().timestamp())
                 config["timestamp"] = str(time.time())
 
-                
-                # Save new salt
-                save_salt(new_salt)
-
-                # Encrypt and save config with new key
+                # Every field is encrypted on its own, so each one must be
+                # re-encrypted under the new key. (Before, only the outer file
+                # was, which left every password and note unreadable.) Work
+                # from the vault on disk and prepare everything in memory;
+                # nothing is written if any step fails.
+                from main.VAULT_FILES import rekey_database, replace_vault
+                current_db = loadDatabase(hashed_pass)
+                new_db = rekey_database(current_db, hashed_pass, new_derived_key, vault)
+                encrypted_db = vault.encrypt_data(json.dumps(new_db).encode(), new_derived_key)
                 encrypted_config = vault.encrypt_data(json.dumps(config).encode(), new_derived_key)
-                with open("bunker.cfg", "wb") as f:
-                    f.write(encrypted_config)
+                # Prove the new files open with the new key before writing.
+                if json.loads(vault.decrypt_data(encrypted_db, new_derived_key)) != new_db:
+                    raise ValueError("re-encrypted vault did not verify")
 
-                # Update and save UI config
                 ui_config = {
                     "attempts": 0,
-                    "max_attempts": config.get("max_attempts", 3),
-                    "disable_ipv4": config.get("settings", {}).get("disable_ipv4", True),
-                    "current_timeout": config.get("timeout_value", 60)
+                    "max_attempts": ui_config.get("max_attempts", 3),
+                    "disable_ipv4": ui_config.get("disable_ipv4", True),
+                    "current_timeout": ui_config.get("current_timeout", 60),
                 }
-                save_ui_config(ui_config)
-
-                # Save database with new key if needed
-                saveDatabase(db, new_derived_key)
+                # Database, config and salt are replaced together, with the
+                # old files kept until all succeed (VAULT_FILES.replace_vault).
+                # UI settings are re-saved right after the salt: their key
+                # depends on it.
+                replace_vault(new_salt, encrypted_config, encrypted_db,
+                              after_salt=lambda: save_ui_config(ui_config))
 
                 print(f"{GREEN}\n ** SUCCESS: Master password changed successfully! Log in again to access the note manager. **{RESET}")
                 timeoutInput(f"\n{GOLD}Press 'enter' to logout...{RESET}")
@@ -1738,10 +1848,10 @@ def changeMasterPassword(hashed_pass, db):
                 sys.exit()
 
             except KeyError as ke:
-                print(f"{RED} ** ALERT: Could not change master password (Error code: 01). KeyError: {ke} **{RESET}")
+                print(f"{RED} ** ALERT: Could not change master password (Error code: 01). Missing field: {safe_error(ke)} **{RESET}")
                 return False
             except Exception as e:
-                print(f"{RED} ** ALERT: Could not change master password (Error code: 03). Error: {e} **{RESET}")
+                print(f"{RED} ** ALERT: Could not change master password (Error code: 03). Error: {safe_error(e)} **{RESET}")
                 return False
             finally:
                 if 'password_provided' in locals(): del password_provided
@@ -1750,7 +1860,7 @@ def changeMasterPassword(hashed_pass, db):
                 vault.secure_wipe()
 
     except Exception as e:
-        print(f"{RED} ** ALERT: An error occurred: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: An error occurred: {safe_error(e)} **{RESET}")
         return False
 
     
@@ -1911,10 +2021,10 @@ def changeAutoLogoutTimer(hashed_pass, db):
                     
             except Exception as e:
                 # Handle any errors with enhanced security
-                print(f"{RED} ** ALERT: Error changing timeout value: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error changing timeout value: {safe_error(e)} **{RESET}")
                 return False
     except Exception as e:
-        print(f"{RED} ** ALERT: Failed to manage timeout settings: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Failed to manage timeout settings: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Clean up sensitive data
@@ -1986,7 +2096,7 @@ def cleanupDatabase(hashed_pass, db):
             if note_count > 0:
                 print(f"{GREEN}** {note_count} invalid note entries removed **{RESET}")
         except Exception as e:
-            print(f"{RED} ** ALERT: Failed to update database. Error: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
             return None
 
     return db

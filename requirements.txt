@@ -1,0 +1,14 @@
+# BUNKER 2.0 runtime dependencies. Install with:
+#   pip install -r requirements.txt
+# Floors are versions with known security fixes; newer versions are fine.
+argon2-cffi>=23.1.0
+cryptography>=44.0.1
+psutil>=5.9.0
+pyperclip>=1.8.2
+requests>=2.32.4
+# Transitive (via cffi). pycparser 3.12 requires Python 3.11+, and BUNKER
+# supports 3.10, so the lock file must not pick it.
+pycparser<3.12
+# cryptography needs typing-extensions on Python 3.10 only; listed here so
+# the lock file (generated on a newer Python) includes it for 3.10.
+typing-extensions>=4.13.2

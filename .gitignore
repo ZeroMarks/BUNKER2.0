@@ -1,0 +1,15 @@
+# Python bytecode — regenerated on every run, never source.
+__pycache__/
+*.py[cod]
+
+# Editor-local preferences. Personal to the machine, not to the project.
+.vscode/
+
+# Personal vault files. Never commit these: they are your encrypted data,
+# the salt needed to open it, and your settings.
+Bunker.mmf
+bunker.cfg
+bunker.salt
+*.bak.*
+# Exports and saved network reports written by the app.
+network_info_*.txt

@@ -413,7 +413,7 @@ def mobile_note_manager(hashed_pass, contents, device_type='mobile'):
                     if 0 <= idx < len(self.notes):
                         note = self.notes[idx]
                         self.ui.header(decode_and_decrypt_secure('title', note, hashed_pass))
-                        print(decode_and_decrypt_secure('content', note, hashed_pass))
+                        reveal_secret("", decode_and_decrypt_secure('content', note, hashed_pass))
                         input(f"\n{VINTAGE}Press Enter to continue...{RESET}")
                     else:
                         self.ui.error_message("Invalid note number")

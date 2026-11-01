@@ -653,7 +653,7 @@ def pwdGenerate(hashed_pass, db):
                     # Display and copy to clipboard
                     clear_screen()
                     displayHeader(f"🪄 {CYAN}GENERATE RANDOM PASSWORD{RESET}")
-                    print(f"Generated Password: {password}")
+                    reveal_secret(f"Generated Password: ", f"{password}\n")
                     print(to_clipboard(password))
 
                     # Ask user to continue or return
@@ -1476,9 +1476,7 @@ def displayFavorites(hashed_pass, db):
                                     print(
                                         f"\n{GOLD}Password requested for {LPURPLE}{domain}!{RESET}"
                                     )
-                                    print(
-                                        f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} {password}{RESET}\n"
-                                    )
+                                    reveal_secret(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} ", f"{password}{RESET}\n")
                                     break
                                 elif copy_choice == "c":
                                     _copied = copy_secret(password)
@@ -2125,9 +2123,7 @@ def findProfileData(hashed_pass, db):
                                 print(
                                     f"\n{GOLD}Password requested for {LPURPLE}{domain}!{RESET}"
                                 )
-                                print(
-                                    f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} {password}{RESET}\n"
-                                )
+                                reveal_secret(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} ", f"{password}{RESET}\n")
                                 break
                             elif option == "c":
                                 _copied = copy_secret(password)
@@ -2332,9 +2328,7 @@ def tagProfiles(hashed_pass, db):
                             print(
                                 f"\n{GOLD}Password requested for {LPURPLE}{domain}!{RESET}"
                             )
-                            print(
-                                f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} {password}{RESET}\n"
-                            )
+                            reveal_secret(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} ", f"{password}{RESET}\n")
                             break
                         elif option == "c":
                             _copied = copy_secret(password)
@@ -2478,7 +2472,7 @@ def readAllProfiles(hashed_pass, db):
                             ).lower()
                             if copy_choice == "v":
                                 print(f"\n{GOLD}Password requested for {LPURPLE}{domain}!{RESET}")
-                                print(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} {password}{RESET}\n")
+                                reveal_secret(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} ", f"{password}{RESET}\n")
                                 break
                             elif copy_choice == "c":
                                 _copied = copy_secret(password)
@@ -2955,9 +2949,9 @@ def displayFavoriteNotes(hashed_pass, db):
                                         print(f"{CYAN}Note {selected_index} {is_favorite}{RESET}")
                                         print(f"{GOLD}Title: {RESET}{title}")
                                         print(f"{GOLD}Tags: {RESET}{', '.join(tags)}")
-                                        print(f"{GOLD}Content: {RESET}{decrypted_content}\n")
+                                        reveal_secret(f"{GOLD}Content: {RESET}", f"{decrypted_content}\n")
                                     else:
-                                        print(f"\n{GOLD}Full Note Content: {RESET}{decrypted_content}\n")
+                                        reveal_secret(f"\n{GOLD}Full Note Content: {RESET}", f"{decrypted_content}\n")
                                     break
                                 elif copy_choice == "c":
                                     _copied = copy_secret(decrypted_content)
@@ -3145,7 +3139,7 @@ def editNoteData(hashed_pass, db):
                         f"\n{CYAN}Note {selected_index} {'⭐' if curr_favorite else ''} {GOLD}| {LPURPLE}Tags: {', '.join(curr_tags)}{RESET}"
                     )
                     print(f"{L_CYAN}Title: {RESET}{curr_title}")
-                    print(f"{L_CYAN}Content: {RESET}{curr_content}\n")
+                    reveal_secret(f"{L_CYAN}Content: {RESET}", f"{curr_content}\n")
 
                     # Prompt for new values
                     new_title = timeoutInput(
@@ -3442,9 +3436,9 @@ def findNoteData(hashed_pass, db):
                                         print(f"{CYAN}Note {selected_note_index} {is_favorite}{RESET}")
                                         print(f"{GOLD}Title: {RESET}{decrypted_title}")
                                         print(f"{GOLD}Tags: {RESET}{tags_str}")
-                                        print(f"{GOLD}Content: {RESET}{content}\n")
+                                        reveal_secret(f"{GOLD}Content: {RESET}", f"{content}\n")
                                     else:
-                                        print(f"\n{GOLD}Full Note Content: {RESET}{content}\n")
+                                        reveal_secret(f"\n{GOLD}Full Note Content: {RESET}", f"{content}\n")
                                     break
                                 elif action == "c":
                                     _copied = copy_secret(content)
@@ -4568,7 +4562,7 @@ def importProfiles(hashed_pass, db):
 
                 print(f"{CYAN}Profile {idx} {favorite} {GOLD}| Tags: {', '.join(tags)}{RESET}")
                 print(f"{L_CYAN}Domain: {RESET}{domain}")
-                print(f"{L_CYAN}Password: {RESET}{pw_preview}\n")
+                reveal_secret(f"{L_CYAN}Password: {RESET}", f"{pw_preview}\n")
 
             except Exception as e:
                 print(f"{RED}Error processing profile {idx}: {str(e)}{RESET}")
@@ -4846,11 +4840,9 @@ def tagNotes(hashed_pass, db):
                                             print(f"{CYAN}Note {selected_index} {is_favorite}{RESET}")
                                             print(f"{GOLD}Title: {RESET}{title}")
                                             print(f"{GOLD}Tags: {RESET}{', '.join(tags)}")
-                                            print(f"{GOLD}Content: {RESET}{decrypted_content}\n")
+                                            reveal_secret(f"{GOLD}Content: {RESET}", f"{decrypted_content}\n")
                                         else:
-                                            print(
-                                                f"\n{GOLD}Full Note Content: {RESET}{decrypted_content}\n"
-                                            )
+                                            reveal_secret(f"\n{GOLD}Full Note Content: {RESET}", f"{decrypted_content}\n")
                                         break
                                     
                                     elif copy_choice == "c":
@@ -5193,7 +5185,7 @@ def displayAllNotes(hashed_pass, db):
                                         print(f"{CYAN}Note {selected_index} {is_favorite}{RESET}")
                                         print(f"{GOLD}Title: {RESET}{title}")
                                         print(f"{GOLD}Tags: {RESET}{', '.join(tags)}")
-                                        print(f"{GOLD}Content: {RESET}{decrypted_content}\n")
+                                        reveal_secret(f"{GOLD}Content: {RESET}", f"{decrypted_content}\n")
                                     else:
                                         clear_screen()
                                         displayHeader(f"{CYAN}📖 VIEW NOTE CONTENT{RESET}")
@@ -5201,7 +5193,7 @@ def displayAllNotes(hashed_pass, db):
                                         print(f"{CYAN}Note {selected_index} {is_favorite}{RESET}")
                                         print(f"{GOLD}Title: {RESET}{title}")
                                         print(f"{GOLD}Tags: {RESET}{', '.join(tags)}")
-                                        print(f"{GOLD}Content: {RESET}{decrypted_content}\n")
+                                        reveal_secret(f"{GOLD}Content: {RESET}", f"{decrypted_content}\n")
                                     break
                                 elif copy_choice == "c":
                                     _copied = copy_secret(decrypted_content)

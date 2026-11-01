@@ -78,25 +78,6 @@ class ModernUI:
     def confirmation_prompt(prompt):
         return input(f"{MUSTARD}{prompt} (y/n): {RESET}").lower() == 'y'
 
-def mobile_setup_view():
-    """Mobile-friendly vault setup view"""
-    try:
-        clear_screen()
-        print(BUNKER_ASCII)
-        print(f"{CYAN}Welcome to BUNKER Mobile Setup{RESET}\n")
-        
-        # Check if vault exists
-        try:
-            with open("bunker.mmf", "rb"):
-                print(f"{GREEN}✓ Existing vault detected{RESET}")
-                return load_salt()
-        except FileNotFoundError:
-            print(f"{MUSTARD}⚠ No vault found - Let's set up a new one{RESET}")
-            return vaultSetup()
-            
-    except Exception as e:
-        print(f"{RED}✗ Setup failed: {safe_error(e)}{RESET}")
-        return None
 
 
 
@@ -689,37 +670,7 @@ class VaultUI:
 
 
 
-def initialize_vault(device_type='mobile'):
-    try:
-        vault_ui = VaultUI(device_type)
-        # Check if vault exists and initialize if needed
-        try:
-            with open("Bunker.mmf", "rb"):
-                pass
-        except FileNotFoundError:
-            clear_screen()
-            print(BUNKER_ASCII)
-            vault_ui.ui.error_message("Vault not found... Setting up new vault")
-            return vaultSetup()
 
-        # Load salt for key derivation
-        salt = load_salt()
-        return salt
-    except Exception as e:
-        print(f"{RED}Failed to load vault: {safe_error(e)}{RESET}")
-        return None
-
-def save_mobile_vault(db, hashed_pass, device_type='mobile'):
-    try:
-        vault_ui = VaultUI(device_type)
-        encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-        with open("Mobile.mmf", "wb") as f:
-            f.write(encrypted_db)
-        vault_ui.ui.success_message("Vault saved successfully")
-        return True
-    except Exception as e:
-        vault_ui.ui.error_message(f"Failed to save mobile vault: {safe_error(e)}")
-        return False
 
 def mobile_profile_manager(hashed_pass, contents, device_type='mobile'):
     """Mobile-friendly profile management view"""
@@ -870,24 +821,5 @@ def encrypt_and_encode_secure(value, hashed_pass):
     return base64.b64encode(
         vault.encrypt_data(str(value).encode(), hashed_pass)
     ).decode("utf-8")
-def mobile_setup_view():
-    """Mobile-friendly vault setup view"""
-    try:
-        clear_screen()
-        print(BUNKER_ASCII)
-        print(f"{CYAN}Welcome to BUNKER Mobile Setup{RESET}\n")
-        
-        # Check if vault exists
-        try:
-            with open("bunker.mmf", "rb"):
-                print(f"{GREEN}✓ Existing vault detected{RESET}")
-                return load_salt()
-        except FileNotFoundError:
-            print(f"{MUSTARD}⚠ No vault found - Let's set up a new one{RESET}")
-            return vaultSetup()
-            
-    except Exception as e:
-        print(f"{RED}✗ Setup failed: {safe_error(e)}{RESET}")
-        return None
 
 

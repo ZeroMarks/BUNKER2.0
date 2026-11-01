@@ -8,7 +8,6 @@ __pycache__/
 # Personal vault files. Never commit these: they are your encrypted data,
 # the salt needed to open it, and your settings.
 Bunker.mmf
-Mobile.mmf
 bunker.cfg
 bunker.salt
 *.bak.*

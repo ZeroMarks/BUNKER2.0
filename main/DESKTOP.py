@@ -274,7 +274,7 @@ def main(device_type='desktop'):
             try:
                 dataBase = loadDatabase(hashed_pass)
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to decrypt database: {str(e)}. Self destructing... **{RESET}")
+                print(f"{RED} ** ALERT: Failed to decrypt database: {safe_error(e)}. Self destructing... **{RESET}")
                 self_destruct()
 
             # Clean up sensitive data
@@ -301,7 +301,7 @@ def main(device_type='desktop'):
         # This is a fallback in case the signal handler doesn't catch it
         interruptCleanup()
     except Exception as e:
-        print(f"{RED}** ALERT: Fatal error: {str(e)}. Self destructing... **{RESET}")
+        print(f"{RED}** ALERT: Fatal error: {safe_error(e)}. Self destructing... **{RESET}")
         self_destruct()
 
     # Normal exit - if we reach here, exit cleanly
@@ -327,7 +327,7 @@ def manage_passwords_and_notes(hashed_pass):
         except json.JSONDecodeError:
             raise ValueError("Database format is invalid")
         except Exception as e:
-            raise ValueError(f"Database decryption failed: {str(e)}")
+            raise ValueError(f"Database decryption failed: {safe_error(e)}")
 
         timedOut = False
         while not timedOut:
@@ -361,7 +361,7 @@ def manage_passwords_and_notes(hashed_pass):
                         latest_contents = f.read()
                     timedOut = main_pwd_manager(hashed_pass, latest_contents)
                 except Exception as e:
-                    print(f"{RED}** ALERT: Failed to read latest database: {str(e)} **{RESET}")
+                    print(f"{RED}** ALERT: Failed to read latest database: {safe_error(e)} **{RESET}")
                     timedOut = main_pwd_manager(hashed_pass, contents)
 
             elif user_cmd == "s":
@@ -371,7 +371,7 @@ def manage_passwords_and_notes(hashed_pass):
                         latest_contents = f.read()
                     timedOut = main_note_manager(hashed_pass, latest_contents)
                 except Exception as e:
-                    print(f"{RED}** ALERT: Failed to read latest database: {str(e)} **{RESET}")
+                    print(f"{RED}** ALERT: Failed to read latest database: {safe_error(e)} **{RESET}")
                     timedOut = main_note_manager(hashed_pass, contents)
 
             elif user_cmd == "d":
@@ -414,11 +414,11 @@ def manage_passwords_and_notes(hashed_pass):
                     decrypted_data = vault.decrypt_data(contents, hashed_pass)
                     db = json.loads(decrypted_data.decode("utf-8"))
                 except Exception as e:
-                    print(f"{RED}** ALERT: Failed to refresh database: {str(e)} **{RESET}")
+                    print(f"{RED}** ALERT: Failed to refresh database: {safe_error(e)} **{RESET}")
                     input(f"{GOLD}Press ENTER to continue...{RESET}")
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to manage database: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to manage database: {safe_error(e)} **{RESET}")
         vault.secure_delete_on_failure()
         
     finally:
@@ -444,7 +444,6 @@ def displayTimeout():
         else:
             return f"{CYAN}Auto-Logout is: {RED}OFF{RESET}"
     except Exception as e:
-        print(f"DEBUG: displayTimeout error: {e}")
         # Fail silently but return a default value
         return f"{CYAN}Auto-Logout: {GOLD}Unknown{RESET}"
     
@@ -514,7 +513,7 @@ def changeDisplayIp(hashed_pass, disable_ipv4):
                 ui_config["disable_ipv4"] = disable_ipv4
                 save_ui_config(ui_config)
             except Exception as e:
-                print(f"{RED}** ALERT: Failed to save UI config: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
 
                 # Save settings to settings file
              #   try:
@@ -529,7 +528,7 @@ def changeDisplayIp(hashed_pass, disable_ipv4):
              #       with open("settings.enc", "wb") as settings_file:
              #           settings_file.write(encrypted_settings)
              #   except Exception as e:
-             #       print(f"{RED}** ALERT: Failed to save settings file: {str(e)} **{RESET}")
+             #       print(f"{RED}** ALERT: Failed to save settings file: {safe_error(e)} **{RESET}")
                 
                 # Update database if needed
              #   try:
@@ -553,10 +552,10 @@ def changeDisplayIp(hashed_pass, disable_ipv4):
                  #       with open("Bunker.mmf", "wb") as f:
                   #          f.write(encrypted_db)
                 #except Exception as e:
-                 #   print(f"{RED}** ALERT: Failed to update database settings: {str(e)} **{RESET}")
+                 #   print(f"{RED}** ALERT: Failed to update database settings: {safe_error(e)} **{RESET}")
                     
            # except Exception as e:
-            #    print(f"{RED}** ALERT: Failed to save settings: {str(e)} **{RESET}")
+            #    print(f"{RED}** ALERT: Failed to save settings: {safe_error(e)} **{RESET}")
 
             while True:
                 userContinue = timeoutInput(
@@ -571,7 +570,7 @@ def changeDisplayIp(hashed_pass, disable_ipv4):
                         f"{RED} ** ALERT: Invalid input. Please press 'enter' to continue or type 'r' to retry. **{RESET}"
                     )
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to change IP display settings: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to change IP display settings: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Clean up sensitive data
@@ -670,7 +669,7 @@ def pwdGenerate(hashed_pass, db):
                 except ValueError as e:
                     clear_screen()
                     displayHeader(f"🪄 {CYAN}GENERATE RANDOM PASSWORD{RESET}")
-                    print(f"{RED} ** ALERT: {e} **{RESET}")
+                    print(f"{RED} ** ALERT: {safe_error(e)} **{RESET}")
                     userContinue = timeoutInput(
                         f"\n{GOLD}Press 'enter' to return to menu or type 'r' to retry...{RESET}"
                     )
@@ -681,7 +680,7 @@ def pwdGenerate(hashed_pass, db):
                     else:
                         return False
     except Exception as e:
-        print(f"{RED} ** ALERT: An error occurred: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: An error occurred: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Clean up sensitive data
@@ -750,7 +749,7 @@ def check_password(hashed_pass, db):
                 return False
                 
     except Exception as e:
-        print(f"{RED} ** ALERT: An error occurred: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: An error occurred: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Clean up sensitive data
@@ -777,7 +776,7 @@ def system_info(hashed_pass, db):
             print(f"Machine: {uname.machine}")
             print(f"Processor: {uname.processor}")
         except Exception as e:
-            print(f"{RED}** ALERT: Error fetching system information: {str(e)} **{RESET}")
+            print(f"{RED}** ALERT: Error fetching system information: {safe_error(e)} **{RESET}")
 
         # Display hardware information
         displaySection("Hardware Information")
@@ -794,7 +793,7 @@ def system_info(hashed_pass, db):
             print(f"🔹 Free Disk Space: {disk_usage.free / (1024 ** 3):.2f} GB")
             print(f"🔹 Disk Usage: {disk_usage.percent}%")
         except Exception as e:
-            print(f"{RED}** ALERT: Error fetching hardware information: {str(e)} **{RESET}")
+            print(f"{RED}** ALERT: Error fetching hardware information: {safe_error(e)} **{RESET}")
 
         print("\n⚠️  ** BEWARE PAGE DOES NOT TIME OUT ** ⚠️")
 
@@ -916,7 +915,7 @@ def system_info(hashed_pass, db):
                                     else:
                                         raise subprocess.SubprocessError("Command failed")
                                 except Exception as e:
-                                    print(f"{RED}** ALERT: Could not get network information: {str(e)} **{RESET}")
+                                    print(f"{RED}** ALERT: Could not get network information: {safe_error(e)} **{RESET}")
                                     print(f"{GOLD}To see detailed network connections, run this script with administrator privileges.{RESET}")
                             else:
                                 # On Windows, try using netstat through subprocess
@@ -947,13 +946,13 @@ def system_info(hashed_pass, db):
                                     else:
                                         raise subprocess.SubprocessError("Command failed")
                                 except Exception as e:
-                                    print(f"{RED}** ALERT: Could not get network information: {str(e)} **{RESET}")
+                                    print(f"{RED}** ALERT: Could not get network information: {safe_error(e)} **{RESET}")
                                     print(f"{GOLD}To see detailed network connections, run this script with administrator privileges.{RESET}")
                     except Exception as e:
-                        print(f"{RED}** ALERT: Error fetching network connections: {str(e)} **{RESET}")
+                        print(f"{RED}** ALERT: Error fetching network connections: {safe_error(e)} **{RESET}")
                         print(f"{GOLD}To see detailed network connections, run this script with administrator privileges.{RESET}")
             except Exception as e:
-                print(f"{RED}** ALERT: Error fetching network information: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Error fetching network information: {safe_error(e)} **{RESET}")
 
         print("\n⚠️  ** BEWARE PAGE DOES NOT TIME OUT ** ⚠️")
 
@@ -965,7 +964,7 @@ def system_info(hashed_pass, db):
             hostname = socket.gethostname()
             print(f"\n🔹 Hostname: {hostname}")
         except Exception as e:
-            print(f"{RED} ** ALERT: Error fetching hostname: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Error fetching hostname: {safe_error(e)} **{RESET}")
             hostname = "Unknown"
         
         # Get local IP safely
@@ -1003,7 +1002,7 @@ def system_info(hashed_pass, db):
             if not ip_address:
                 ip_address = "Unknown"
         except Exception as e:
-            print(f"{RED} ** ALERT: Error determining local IP: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Error determining local IP: {safe_error(e)} **{RESET}")
             ip_address = "Unknown"
         
         # Get external IP safely
@@ -1012,7 +1011,7 @@ def system_info(hashed_pass, db):
             if not external_ip:
                 external_ip = "Unknown"
         except Exception as e:
-            print(f"{RED} ** ALERT: Error fetching external IP: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Error fetching external IP: {safe_error(e)} **{RESET}")
             external_ip = "Unknown"
         
         # Ask if user wants to see IP addresses
@@ -1043,20 +1042,20 @@ def system_info(hashed_pass, db):
             vpn_status = check_vpn()
             print(f"🔹 VPN Status: {'Connected' if vpn_status else 'Not connected'}")
         except Exception as e:
-            print(f"{RED} ** ALERT: Error checking VPN status: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Error checking VPN status: {safe_error(e)} **{RESET}")
 
         # Get uptime safely
         try:
             uptime = get_uptime()
             print(f"🔹 System Uptime: {uptime}")
         except Exception as e:
-            print(f"{RED} ** ALERT: Error fetching uptime: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Error fetching uptime: {safe_error(e)} **{RESET}")
 
         userContinue = input(f"\n{GOLD}Press 'enter' to return to menu... {RESET}")
         return False
         
     except Exception as e:
-        print(f"{RED}** ALERT: Error displaying system information: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Error displaying system information: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -1119,7 +1118,7 @@ def main_pwd_manager(hashed_pass, contents):
             decrypted_data = vault.decrypt_data(contents, hashed_pass)
             db = json.loads(decrypted_data.decode("utf-8"))
         except Exception as e:
-            raise ValueError(f"Failed to decrypt database: {str(e)}")
+            raise ValueError(f"Failed to decrypt database: {safe_error(e)}")
         
         timedOut = False
         while not timedOut:
@@ -1183,11 +1182,11 @@ def main_pwd_manager(hashed_pass, contents):
                     return False
 
             except Exception as e:
-                print(f"{RED}** ALERT: Operation failed: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Operation failed: {safe_error(e)} **{RESET}")
                 input(f"{GOLD}Press ENTER to continue...{RESET}")
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to manage accounts: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to manage accounts: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -1355,7 +1354,7 @@ def addProfile(hashed_pass, db):
                     continue
                 return False
             except Exception as e:
-                print(f"{RED}Failed to add profile. Error: {str(e)}{RESET}")
+                print(f"{RED}Failed to add profile. Error: {safe_error(e)}{RESET}")
                 userContinue = timeoutInput(
                     f"{GOLD}\nPress 'enter' to return to menu or type 'r' to retry...{RESET}"
                 )
@@ -1366,7 +1365,7 @@ def addProfile(hashed_pass, db):
                     continue
                 return False
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to add profile: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to add profile: {safe_error(e)} **{RESET}")
         return False
     finally:
         if 'add_password' in locals(): del add_password
@@ -1392,7 +1391,7 @@ def displayFavorites(hashed_pass, db):
                 decrypted_data = vault.decrypt_data(db, hashed_pass)
                 db = json.loads(decrypted_data.decode("utf-8"))
             except Exception as e:
-                print(f"{RED} ** ALERT: Error loading database: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
 
         # Filter favorite profiles
@@ -1507,7 +1506,7 @@ def displayFavorites(hashed_pass, db):
                                     )
                         except Exception as e:
                             print(
-                                f"{RED} ** ALERT: Error reading password for profile '{selected_index}': {str(e)} **{RESET}"
+                                f"{RED} ** ALERT: Error reading password for profile '{selected_index}': {safe_error(e)} **{RESET}"
                             )
                             continue
                     else:
@@ -1521,7 +1520,7 @@ def displayFavorites(hashed_pass, db):
         return False if userContinue != timeoutGlobalCode else True
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to display favorites: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to display favorites: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -1778,7 +1777,7 @@ def editProfileData(hashed_pass, db):
                 print(f"\n{GOLD}Selected profile {CYAN}(#{choice}){GOLD} updated successfully!{RESET}")
 
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to update database. Error: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
 
             userContinue = timeoutInput(
                 f"{GOLD}\nPress 'enter' to return to menu or type 'r' to retry...{RESET}"
@@ -1791,7 +1790,7 @@ def editProfileData(hashed_pass, db):
                 return False
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to edit profile: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to edit profile: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -1878,7 +1877,7 @@ def deleteProfileData(hashed_pass, db):
                     )
                 except Exception as e:
                     print(
-                        f"{RED} ** ALERT: Error reading profile '{profile_id}': {str(e)} **{RESET}"
+                        f"{RED} ** ALERT: Error reading profile '{profile_id}': {safe_error(e)} **{RESET}"
                     )
 
             # Ask if the user wants to delete all, select profiles, or cancel
@@ -1946,7 +1945,7 @@ def deleteProfileData(hashed_pass, db):
                     )
                 except Exception as e:
                     print(
-                        f"{RED} ** ALERT: Error decrypting domain '{profile_id}': {str(e)} **{RESET}"
+                        f"{RED} ** ALERT: Error decrypting domain '{profile_id}': {safe_error(e)} **{RESET}"
                     )
 
             # Delete the profiles
@@ -1971,7 +1970,7 @@ def deleteProfileData(hashed_pass, db):
                 with open("Bunker.mmf", "wb") as f:
                     f.write(encrypted_db)
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to update database. Error: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
 
             userContinue = timeoutInput(
                 f"{GOLD}\nPress 'enter' to return to menu or type 'r' to retry...{RESET}"
@@ -1982,7 +1981,7 @@ def deleteProfileData(hashed_pass, db):
                 return False if userContinue != timeoutGlobalCode else True
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to delete profile: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to delete profile: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -2069,7 +2068,7 @@ def findProfileData(hashed_pass, db):
                             f"{DBLUE}Username: {RESET}{username}, {DBLUE}Email: {RESET}{email}"
                         )
                     except Exception as e:
-                        print(f"{RED} ** ALERT: Error decrypting profile {i}: {str(e)} **{RESET}")
+                        print(f"{RED} ** ALERT: Error decrypting profile {i}: {safe_error(e)} **{RESET}")
                         continue
 
                 profile_range = (
@@ -2153,14 +2152,14 @@ def findProfileData(hashed_pass, db):
                         continue
 
             except Exception as e:
-                print(f"{RED} ** ALERT: Error finding profile: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error finding profile: {safe_error(e)} **{RESET}")
                 userContinue = timeoutInput(
                     f"{GOLD}\nPress 'enter' to return to menu...{RESET}"
                 )
                 return False if userContinue != timeoutGlobalCode else True
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to find profile: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to find profile: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -2180,7 +2179,7 @@ def tagProfiles(hashed_pass, db):
                 decrypted_data = vault.decrypt_data(db, hashed_pass)
                 db = json.loads(decrypted_data.decode("utf-8"))
             except Exception as e:
-                print(f"{RED} ** ALERT: Error loading database: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
 
         # Collect all domains from the database (only from valid profiles)
@@ -2367,7 +2366,7 @@ def tagProfiles(hashed_pass, db):
             return False if userContinue != timeoutGlobalCode else True
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to tag profiles: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to tag profiles: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -2497,7 +2496,7 @@ def readAllProfiles(hashed_pass, db):
                                 print(f"{RED} ** ALERT: Invalid input. Please press 'enter' to return to the main menu or type 'r' to retry. **{RESET}")
 
                     except Exception as e:
-                        print(f"{RED} ** ALERT: Error reading password for profile '{selected_index}': {str(e)} **{RESET}")
+                        print(f"{RED} ** ALERT: Error reading password for profile '{selected_index}': {safe_error(e)} **{RESET}")
                         continue
                 else:
                     print(f"{RED} ** ALERT: Invalid profile number. **{RESET}")
@@ -2508,7 +2507,7 @@ def readAllProfiles(hashed_pass, db):
         return False if userContinue != timeoutGlobalCode else True
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to read profiles: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to read profiles: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -2538,7 +2537,7 @@ def main_note_manager(hashed_pass, contents):
             decrypted_data = vault.decrypt_data(contents, hashed_pass)
             db = json.loads(decrypted_data.decode("utf-8"))
         except Exception as e:
-            raise ValueError(f"Failed to decrypt database: {str(e)}")
+            raise ValueError(f"Failed to decrypt database: {safe_error(e)}")
         
         timedOut = False
         while not timedOut:
@@ -2597,7 +2596,7 @@ def main_note_manager(hashed_pass, contents):
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
-                            print(f"{RED}** ALERT: Failed to save changes: {str(e)} **{RESET}")
+                            print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
 
                 elif user_cmd == "s":
@@ -2614,7 +2613,7 @@ def main_note_manager(hashed_pass, contents):
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
-                            print(f"{RED}** ALERT: Failed to save changes: {str(e)} **{RESET}")
+                            print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
 
                 elif user_cmd == "f":
@@ -2637,7 +2636,7 @@ def main_note_manager(hashed_pass, contents):
                             # Update contents for future operations
                             contents = encrypted_db
                         except Exception as e:
-                            print(f"{RED}** ALERT: Failed to save changes: {str(e)} **{RESET}")
+                            print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
 
                 elif user_cmd == "t":
@@ -2648,11 +2647,11 @@ def main_note_manager(hashed_pass, contents):
                     return False
 
             except Exception as e:
-                print(f"{RED}** ALERT: Operation failed: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Operation failed: {safe_error(e)} **{RESET}")
                 input(f"{GOLD}Press ENTER to continue...{RESET}")
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to manage notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to manage notes: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -2800,7 +2799,7 @@ def addNote(hashed_pass, db):
                     print(f"{GOLD}• Tags: {LPURPLE}{', '.join(decrypted_tags)}{RESET}")
                     print(f"{GOLD}• Favorite: {LPURPLE}{'Yes' if is_favorite else 'No'}{RESET}")
             except Exception as e:
-                print(f"{RED}** ALERT: Failed to add note. Error: {e} **{RESET}")
+                print(f"{RED}** ALERT: Failed to add note. Error: {safe_error(e)} **{RESET}")
 
             while True:
                 userContinue = timeoutInput(
@@ -2817,7 +2816,7 @@ def addNote(hashed_pass, db):
                         f"{RED}** ALERT: Invalid input. Please press 'enter' to return to menu or type 'r' to add another note. **{RESET}"
                     )
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to add note: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to add note: {safe_error(e)} **{RESET}")
         return False
     finally:
         if 'note_title' in locals(): del note_title
@@ -2837,7 +2836,7 @@ def displayFavoriteNotes(hashed_pass, db):
                 decrypted_data = vault.decrypt_data(db, hashed_pass)
                 db = json.loads(decrypted_data.decode("utf-8"))
             except Exception as e:
-                print(f"{RED} ** ALERT: Error loading database: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
 
         # Filter favorite notes with new structure
@@ -2867,7 +2866,7 @@ def displayFavoriteNotes(hashed_pass, db):
                     (idx, note_id, decrypted_title, preview_text, tags, info, is_favorite, is_private)
                 )
             except Exception as e:
-                print(f"{RED}Error decrypting note {idx}: {str(e)}{RESET}")
+                print(f"{RED}Error decrypting note {idx}: {safe_error(e)}{RESET}")
                 continue
 
         num_favorites = len(decrypted_notes)
@@ -2980,7 +2979,7 @@ def displayFavoriteNotes(hashed_pass, db):
                                     )
                         except Exception as e:
                             print(
-                                f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {str(e)} **{RESET}"
+                                f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {safe_error(e)} **{RESET}"
                             )
                             continue
                     else:
@@ -2996,7 +2995,7 @@ def displayFavoriteNotes(hashed_pass, db):
         return False
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to display favorite notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to display favorite notes: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -3084,7 +3083,7 @@ def editNoteData(hashed_pass, db):
                         f"{L_CYAN}Title: {RESET}{decrypted_title} {GOLD}, {DBLUE}Preview:{RESET} {preview_text}"
                         )
                 except Exception as e:
-                    print(f"{RED}Error displaying note: {e}{RESET}")
+                    print(f"{RED}Error displaying note: {safe_error(e)}{RESET}")
 
             # Prompt for note selection
             while True:
@@ -3262,7 +3261,7 @@ def editNoteData(hashed_pass, db):
 
                 except KeyError as e:
                     print(
-                        f"{RED}** ALERT: Note '{selected_index}' not found in database. Error: {e} **{RESET}"
+                        f"{RED}** ALERT: Note '{selected_index}' not found in database. Error: {safe_error(e)} **{RESET}"
                     )
                     userContinue = timeoutInput(
                         f"{GOLD}\nPress 'enter' to return to menu or 'r' to retry editing...{RESET}"
@@ -3277,7 +3276,7 @@ def editNoteData(hashed_pass, db):
 
                 except Exception as e:
                     print(
-                        f"{RED}** ALERT: Failed to edit note '{selected_index}'. Error: {e} **{RESET}"
+                        f"{RED}** ALERT: Failed to edit note '{selected_index}'. Error: {safe_error(e)} **{RESET}"
                     )
                     userContinue = timeoutInput(
                         f"{GOLD}\nPress 'enter' to return to menu or 'r' to retry editing...{RESET}"
@@ -3291,7 +3290,7 @@ def editNoteData(hashed_pass, db):
                         return False
                         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to edit note: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to edit note: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -3381,7 +3380,7 @@ def findNoteData(hashed_pass, db):
 
                         except Exception as e:
                             print(
-                                f"{RED} ** ALERT: Error displaying note {idx}: {e} **{RESET}"
+                                f"{RED} ** ALERT: Error displaying note {idx}: {safe_error(e)} **{RESET}"
                             )
 
                     while True:
@@ -3482,7 +3481,7 @@ def findNoteData(hashed_pass, db):
                     )
 
             except Exception as e:
-                print(f"{RED} ** ALERT: Error finding note. Error: {e} **{RESET}")
+                print(f"{RED} ** ALERT: Error finding note. Error: {safe_error(e)} **{RESET}")
 
             userContinue = timeoutInput(
                 f"{GOLD}\nPress 'enter' to return to menu or 'r' to retry: {RESET}"
@@ -3494,7 +3493,7 @@ def findNoteData(hashed_pass, db):
             return False
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to find note: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to find note: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -3528,7 +3527,7 @@ def manageNotes(hashed_pass, db):
                 )
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to manage notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to manage notes: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -3588,7 +3587,7 @@ def exportNotes(hashed_pass, db):
                             print(f"{L_CYAN}Title: {RESET}{decrypted_title}\n")
                         note_list.append(note_id)
                     except Exception as e:
-                        print(f"{RED}Error decrypting note {note_id}: {str(e)}{RESET}\n")
+                        print(f"{RED}Error decrypting note {note_id}: {safe_error(e)}{RESET}\n")
                 if not note_list:
                     print(f"{RED}No decryptable notes available for export.{RESET}")
                     return False
@@ -3733,7 +3732,7 @@ def exportNotes(hashed_pass, db):
                 decrypted_notes[str(note_counter)] = minimal_note
             except Exception as e:
                 error_counter += 1
-                print(f"{RED}Note {note_id} failed: {str(e)}{RESET}")
+                print(f"{RED}Note {note_id} failed: {safe_error(e)}{RESET}")
 
         print(f"\n{CYAN}Note processing complete.{RESET}")
         if note_counter == 0:
@@ -3801,7 +3800,7 @@ def exportNotes(hashed_pass, db):
         return True
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to export notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to export notes: {safe_error(e)} **{RESET}")
         return False
     finally:
         if 'hashed_pass' in locals(): del hashed_pass
@@ -3850,7 +3849,7 @@ def importNotes(hashed_pass, db):
             with open(file_name, "r", encoding="utf-8") as f:
                 import_data = json.load(f)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"{RED}** ALERT: Invalid JSON file format: {str(e)} **{RESET}")
+            print(f"{RED}** ALERT: Invalid JSON file format: {safe_error(e)} **{RESET}")
             return False
 
         # Determine if file is encrypted (has salt/verifier/data) or plain text.
@@ -3899,7 +3898,7 @@ def importNotes(hashed_pass, db):
                 decrypted_bytes = vault.decrypt_data(ciphertext, export_key)
                 file_structure = json.loads(decrypted_bytes.decode("utf-8"))
             except Exception as e:
-                print(f"{RED}** ALERT: Failed to decrypt file: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Failed to decrypt file: {safe_error(e)} **{RESET}")
                 return False
         else:
             print(f"\n{CYAN}Detected: {GREEN}Plain text BUNKER File{RESET}")
@@ -4004,7 +4003,7 @@ def importNotes(hashed_pass, db):
                 }
                 imported_count += 1
             except Exception as e:
-                print(f"{RED}** ALERT: Failed to import a note: {str(e)} **{RESET}")
+                print(f"{RED}** ALERT: Failed to import a note: {safe_error(e)} **{RESET}")
                 continue
 
         if saveDatabase(db, hashed_pass):
@@ -4017,7 +4016,7 @@ def importNotes(hashed_pass, db):
             return False
 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to import notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to import notes: {safe_error(e)} **{RESET}")
         return False
 
     finally:
@@ -4048,7 +4047,7 @@ def manageProfiles(hashed_pass, db):
                 )
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to manage profiles: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to manage profiles: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -4109,7 +4108,7 @@ def exportProfiles(hashed_pass, db):
                         profile_list.append(profile_id)
                     except Exception as e:
                         print(
-                            f"{RED}Error decrypting profile {profile_id}: {str(e)}{RESET}"
+                            f"{RED}Error decrypting profile {profile_id}: {safe_error(e)}{RESET}"
                         )
                         continue
     
@@ -4281,7 +4280,7 @@ def exportProfiles(hashed_pass, db):
                         decrypted_password = decode_and_decrypt("password", profile_data, hashed_pass)
                     except Exception as e:
                         print(f"{RED}Profile {profile_id} failed: Decryption error{RESET}")
-                        print(f"Error details: {str(e)}{RESET}")
+                        print(f"Error details: {safe_error(e)}{RESET}")
                         error_counter += 1
                         continue
     
@@ -4303,7 +4302,7 @@ def exportProfiles(hashed_pass, db):
                     profile_counter += 1
                 except Exception as e:
                     print(
-                        f"{GOLD}Warning: Could not decrypt {field} for profile {profile_id}: {str(e)}{RESET}"
+                        f"{GOLD}Warning: Could not decrypt {field} for profile {profile_id}: {safe_error(e)}{RESET}"
                     )
                     error_counter += 1
                     continue
@@ -4312,7 +4311,7 @@ def exportProfiles(hashed_pass, db):
     
                 except Exception as e:
                     print(f"{RED}Profile {profile_id} failed: Unexpected error{RESET}")
-                    print(f"Error details: {str(e)}{RESET}")
+                    print(f"Error details: {safe_error(e)}{RESET}")
                     error_counter += 1
                     continue
     
@@ -4352,7 +4351,7 @@ def exportProfiles(hashed_pass, db):
                     with open(file_name, "w", encoding="utf-8") as file:
                         json.dump(encrypted_export, file, indent=4, ensure_ascii=False)
                 except Exception as e:
-                    print(f"{RED} ** ALERT: Failed to encrypt data. Error: {str(e)} **{RESET}")
+                    print(f"{RED} ** ALERT: Failed to encrypt data. Error: {safe_error(e)} **{RESET}")
                     return False
             else:
                 with open(file_name, "w", encoding="utf-8") as file:
@@ -4394,11 +4393,11 @@ def exportProfiles(hashed_pass, db):
             return False if userContinue != timeoutGlobalCode else True
     
         except Exception as e:
-            print(f"{RED} ** ALERT: Failed to export profiles. Error: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Failed to export profiles. Error: {safe_error(e)} **{RESET}")
             return False
             
     except Exception as e:
-        print(f"{RED} ** ALERT: Failed to export profiles. Error: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Failed to export profiles. Error: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -4454,7 +4453,7 @@ def importProfiles(hashed_pass, db):
             with open(file_name, "r", encoding="utf-8") as file:
                 import_data = json.load(file)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            print(f"{RED} ** ALERT: Invalid JSON file format: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Invalid JSON file format: {safe_error(e)} **{RESET}")
             return False
 
         # Check if this is an encrypted file by looking for salt and verifier
@@ -4502,7 +4501,7 @@ def importProfiles(hashed_pass, db):
                 file_structure = json.loads(decrypted_data)
                 profiles_to_import = file_structure.get("profiles", {})
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to decrypt file. File may be corrupted. Error: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Failed to decrypt file. File may be corrupted. Error: {safe_error(e)} **{RESET}")
                 userContinue = timeoutInput(f"{GOLD}\nPress 'enter' to try another file or type (.c) to cancel...{RESET}")
                 if userContinue == ".c" or userContinue == timeoutGlobalCode:
                     return False if userContinue != timeoutGlobalCode else True
@@ -4565,7 +4564,7 @@ def importProfiles(hashed_pass, db):
                 reveal_secret(f"{L_CYAN}Password: {RESET}", f"{pw_preview}\n")
 
             except Exception as e:
-                print(f"{RED}Error processing profile {idx}: {str(e)}{RESET}")
+                print(f"{RED}Error processing profile {idx}: {safe_error(e)}{RESET}")
                 continue
         # Confirm import
         while True:
@@ -4600,7 +4599,7 @@ def importProfiles(hashed_pass, db):
                 db[profile_id] = encrypted_profile
                 imported_count += 1
             except Exception as e:
-                print(f"{RED} ** ALERT: Error importing profile: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error importing profile: {safe_error(e)} **{RESET}")
                 continue
 
         encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
@@ -4613,7 +4612,7 @@ def importProfiles(hashed_pass, db):
         return False
 
     except Exception as e:
-        print(f"{RED} ** ALERT: Failed to import profiles: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Failed to import profiles: {safe_error(e)} **{RESET}")
         return False
 
     finally:
@@ -4637,7 +4636,7 @@ def tagNotes(hashed_pass, db):
                     decrypted_data = vault.decrypt_data(db, hashed_pass)
                     db = json.loads(decrypted_data.decode("utf-8"))
                 except Exception as e:
-                    print(f"{RED} ** ALERT: Error loading database: {e} **{RESET}")
+                    print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                     return False
 
             # Collect all tags from the database (excluding profiles)
@@ -4653,7 +4652,7 @@ def tagNotes(hashed_pass, db):
                             else:
                                 all_tags[decrypted_tag] = [note_id]
                         except Exception as e:
-                            print(f"{RED} ** ALERT: Error decrypting tag: {e} **{RESET}")
+                            print(f"{RED} ** ALERT: Error decrypting tag: {safe_error(e)} **{RESET}")
                             continue
 
             if not all_tags:
@@ -4748,7 +4747,7 @@ def tagNotes(hashed_pass, db):
                         )
                     )
                 except Exception as e:
-                    print(f"{RED}Error decrypting note {idx}: {e}{RESET}")
+                    print(f"{RED}Error decrypting note {idx}: {safe_error(e)}{RESET}")
                     continue
 
             num_matching_notes = len(decrypted_notes)
@@ -4880,7 +4879,7 @@ def tagNotes(hashed_pass, db):
                                         )
                             except Exception as e:
                                 print(
-                                    f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {e} **{RESET}"
+                                    f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {safe_error(e)} **{RESET}"
                                 )
                                 continue
                         else:
@@ -4894,7 +4893,7 @@ def tagNotes(hashed_pass, db):
             return False if userContinue != timeoutGlobalCode else True
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to tag notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to tag notes: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -4936,7 +4935,7 @@ def deleteNoteData(hashed_pass, db):
                             if del_title.lower() in decrypted_title.lower():
                                 matching_notes[note_id] = info
                     except Exception as e:
-                        print(f"{RED} ** ALERT: Error decrypting note {note_id}: {e} **{RESET}")
+                        print(f"{RED} ** ALERT: Error decrypting note {note_id}: {safe_error(e)} **{RESET}")
                 
                 clear_screen()
                 displayHeader(f"{CYAN}🗑️  DELETE A NOTE{RESET}")
@@ -4971,7 +4970,7 @@ def deleteNoteData(hashed_pass, db):
                         print(f"{L_CYAN}Title:{RESET} {decrypted_title} {GOLD}, {DBLUE}Content Preview: {RESET}{preview_text}\n")
 
                 except Exception as e:
-                    print(f"{RED} ** ALERT: Error displaying note {note_id}: {e} **{RESET}\n")
+                    print(f"{RED} ** ALERT: Error displaying note {note_id}: {safe_error(e)} **{RESET}\n")
             
             delete_choice = timeoutInput(
                 f"\n{GOLD}Delete all {len(matching_notes)} notes? (type 'a' to delete all, 's' to choose notes, or (.c) to cancel): {RESET}"
@@ -5019,7 +5018,7 @@ def deleteNoteData(hashed_pass, db):
                         is_private = note_info.get("private", False)
                         print(f"{CYAN}Note {index} {is_favorite} {GOLD}| {'🔒 PRIVATE NOTE' if is_private else f'Title: {decrypted_title}'}{RESET}")
                     except Exception as e:
-                        print(f"{RED} ** ALERT: Error displaying deleted note {index}: {e} **{RESET}")
+                        print(f"{RED} ** ALERT: Error displaying deleted note {index}: {safe_error(e)} **{RESET}")
             
             try:
                 # Use enhanced security for encryption and save as binary
@@ -5027,7 +5026,7 @@ def deleteNoteData(hashed_pass, db):
                 with open("Bunker.mmf", "wb") as f:
                     f.write(encrypted_db)
             except Exception as e:
-                print(f"{RED} ** ALERT: Failed to update database. Error: {e} **{RESET}")
+                print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
             
             userContinue = timeoutInput(f"{GOLD}\nPress 'enter' to return or type 'r' to retry...{RESET}")
             if userContinue == "r":
@@ -5038,7 +5037,7 @@ def deleteNoteData(hashed_pass, db):
                 return False
                 
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to delete note: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to delete note: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -5107,7 +5106,7 @@ def displayAllNotes(hashed_pass, db):
                     )
                     )
                 except Exception as e:
-                    print(f"{RED}Error decrypting note {idx}: {str(e)}{RESET}")
+                    print(f"{RED}Error decrypting note {idx}: {safe_error(e)}{RESET}")
 
         if note_count == 0:
             print(f"{RED} ** ALERT: No notes available to display. ADD A NOTE! **{RESET}")
@@ -5226,7 +5225,7 @@ def displayAllNotes(hashed_pass, db):
                                     )
                         except Exception as e:
                             print(
-                                f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {str(e)}{RESET}"
+                                f"{RED} ** ALERT: Error decrypting content for note '{selected_index}': {safe_error(e)}{RESET}"
                             )
                             continue
                     else:
@@ -5240,7 +5239,7 @@ def displayAllNotes(hashed_pass, db):
             return False if userContinue != timeoutGlobalCode else True
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to display notes: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to display notes: {safe_error(e)} **{RESET}")
         return False
         
     finally:
@@ -5278,7 +5277,7 @@ def display_network_information():
                 
                 print(f"🔹 {interface}: {', '.join(filtered_addresses)}")
     except Exception as e:
-        print(f"{RED} ** ALERT: Error fetching network interfaces: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Error fetching network interfaces: {safe_error(e)} **{RESET}")
 
     try:
         displaySection("Detailed Network Connection")
@@ -5382,11 +5381,11 @@ def display_network_information():
                 
                 print(f"{GREEN}** SUCCESS: Network information saved to {filename} **{RESET}")
             except Exception as e:
-                print(f"{RED} ** ALERT: Error saving network information: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error saving network information: {safe_error(e)} **{RESET}")
                 
     except Exception as e:
         print(
-            f"{RED} ** ALERT: Error displaying network information: {str(e)}. Try running with administrator/root privileges. (pid={os.getpid()}) **{RESET}"
+            f"{RED} ** ALERT: Error displaying network information: {safe_error(e)}. Try running with administrator/root privileges. (pid={os.getpid()}) **{RESET}"
         )
     
     # Wait for user input before returning

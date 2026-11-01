@@ -95,7 +95,7 @@ def mobile_setup_view():
             return vaultSetup()
             
     except Exception as e:
-        print(f"{RED}✗ Setup failed: {str(e)}{RESET}")
+        print(f"{RED}✗ Setup failed: {safe_error(e)}{RESET}")
         return None
 
 
@@ -226,7 +226,7 @@ def main(device_type='mobile'):
             break
             
         except Exception as e:
-            vault_ui.ui.error_message(f"Login failed: {str(e)}")
+            vault_ui.ui.error_message(f"Login failed: {safe_error(e)}")
             attempts += 1
     
     if not vault_key:
@@ -606,7 +606,7 @@ def save_device_preference(device_type):
         return True
         
     except Exception as e:
-        vault_ui.ui.error_message(f"Failed to save device preference: {str(e)}")
+        vault_ui.ui.error_message(f"Failed to save device preference: {safe_error(e)}")
         return False
 
 
@@ -706,7 +706,7 @@ def initialize_vault(device_type='mobile'):
         salt = load_salt()
         return salt
     except Exception as e:
-        print(f"{RED}Failed to load vault: {str(e)}{RESET}")
+        print(f"{RED}Failed to load vault: {safe_error(e)}{RESET}")
         return None
 
 def save_mobile_vault(db, hashed_pass, device_type='mobile'):
@@ -718,7 +718,7 @@ def save_mobile_vault(db, hashed_pass, device_type='mobile'):
         vault_ui.ui.success_message("Vault saved successfully")
         return True
     except Exception as e:
-        vault_ui.ui.error_message(f"Failed to save mobile vault: {str(e)}")
+        vault_ui.ui.error_message(f"Failed to save mobile vault: {safe_error(e)}")
         return False
 
 def mobile_profile_manager(hashed_pass, contents, device_type='mobile'):
@@ -862,7 +862,7 @@ def mobile_feature_select(hashed_pass, device_type='mobile'):
                 vault_ui.ui.error_message("Invalid option")
                 
     except Exception as e:
-        vault_ui.ui.error_message(f"An error occurred: {str(e)}")
+        vault_ui.ui.error_message(f"An error occurred: {safe_error(e)}")
         return False
     return True
 
@@ -887,7 +887,7 @@ def mobile_setup_view():
             return vaultSetup()
             
     except Exception as e:
-        print(f"{RED}✗ Setup failed: {str(e)}{RESET}")
+        print(f"{RED}✗ Setup failed: {safe_error(e)}{RESET}")
         return None
 
 

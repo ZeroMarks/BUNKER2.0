@@ -1,5 +1,6 @@
 import sys, random, string, os, platform, gc,\
 pyperclip, requests, psutil, datetime, secrets
+from main.SECURE_IO import safe_error
 
 
 # ANSI escape codes for colored output
@@ -434,7 +435,7 @@ def spinning_line(duration, message="Checking Files for tampering...", color=GOL
         time.sleep(duration)
         clear_screen()
         # Optionally log the error
-        # print(f"{RED}Animation error: {str(e)}{RESET}")
+        # print(f"{RED}Animation error: {safe_error(e)}{RESET}")
 
 def get_config_paths():
     """Get all possible config file paths"""
@@ -531,10 +532,10 @@ def self_destruct():
                             os.remove(path)
                             deleted_count += 1
                         except Exception as inner_e:
-                            print(f"{RED}Failed to delete {path}: {str(inner_e)}{RESET}")
+                            print(f"{RED}Failed to delete {path}: {safe_error(inner_e)}{RESET}")
                 
     except Exception as e:
-        print(f"{RED}Error during self-destruct: {str(e)}{RESET}")
+        print(f"{RED}Error during self-destruct: {safe_error(e)}{RESET}")
     finally:
         # Enhanced memory wiping
         gc.collect()
@@ -594,7 +595,7 @@ def get_uptime():
             return f"{minutes} minutes, {seconds} seconds"
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error fetching system uptime: {str(e)}{RESET}")
+        print(f"{RED}Error fetching system uptime: {safe_error(e)}{RESET}")
         return "Unknown"
 
 
@@ -628,7 +629,7 @@ def check_vpn():
         
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error checking VPN status: {str(e)}{RESET}")
+        print(f"{RED}Error checking VPN status: {safe_error(e)}{RESET}")
         return False
 
 
@@ -660,7 +661,7 @@ def get_external_ip():
         
     except Exception as e:
         # More specific error message
-        print(f"{RED}Error fetching external IP: {str(e)}{RESET}")
+        print(f"{RED}Error fetching external IP: {safe_error(e)}{RESET}")
         return "Unknown"
     
     
@@ -671,7 +672,7 @@ def get_network_interfaces():
         # Filter out loopback interfaces for security
         return {k: v for k, v in interfaces.items() if not k.startswith('lo')}
     except Exception as e:
-        print(f"{RED}Error fetching network interfaces: {str(e)}{RESET}")
+        print(f"{RED}Error fetching network interfaces: {safe_error(e)}{RESET}")
         return {}
 
 
@@ -700,7 +701,7 @@ def get_network_connections(timeout=5):
         # More helpful error message with instructions
         return None, "Permission denied. Try running with administrator/root privileges."
     except Exception as e:
-        return None, f"Error: {str(e)}"
+        return None, f"Error: {safe_error(e)}"
 
 
 def format_connections(connections, detailed=False):
@@ -745,7 +746,7 @@ def format_connections(connections, detailed=False):
         return formatted_connections
         
     except Exception as e:
-        return [f"{RED}Error formatting connections: {str(e)}{RESET}"]
+        return [f"{RED}Error formatting connections: {safe_error(e)}{RESET}"]
 
 
 def display_network_summary(connections):
@@ -791,7 +792,7 @@ def display_network_summary(connections):
                 print(f"   - {ip}: {count} connection{'s' if count > 1 else ''}")
                 
     except Exception as e:
-        print(f"{RED}Error displaying network summary: {str(e)}{RESET}")
+        print(f"{RED}Error displaying network summary: {safe_error(e)}{RESET}")
 
 
 
@@ -1022,7 +1023,7 @@ def combined_tips(feedback):
         
     except Exception as e:
         # Return a basic set of tips if there's an error
-        print(f"{RED}Error generating password tips: {str(e)}{RESET}")
+        print(f"{RED}Error generating password tips: {safe_error(e)}{RESET}")
         return [
             "Use a mix of uppercase letters, lowercase letters, numbers, and symbols.",
             "Make your password at least 12 characters long.",
@@ -1109,7 +1110,7 @@ def generate_password(length=12, allowed_symbols="~!@#$%^&*_-+=`", enhanced=True
             
     except Exception as e:
         # Fallback to a simpler but still secure method if there's an error
-        print(f"{RED}Error generating password: {str(e)}{RESET}")
+        print(f"{RED}Error generating password: {safe_error(e)}{RESET}")
         
         # Simple fallback method
         chars = string.ascii_letters + string.digits + "!@#$%^&*"

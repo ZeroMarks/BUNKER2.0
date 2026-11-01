@@ -1,4 +1,5 @@
 import os, platform
+from main.SECURE_IO import safe_error
 import importlib.util
 import time
 import sys
@@ -316,7 +317,7 @@ class SecureVaultEnhanced:
             
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Key derivation failed: {str(e)}")
+            raise ValueError(f"Key derivation failed: {safe_error(e)}")
             
     def secure_wipe(self):
         """Securely wipe sensitive data from memory"""
@@ -452,7 +453,7 @@ def save_ui_config(config):
         os.replace(temp_file, "config.cfg")
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to save UI config: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
         if os.path.exists("config.cfg.tmp"):
             os.remove("config.cfg.tmp")
         raise
@@ -488,7 +489,7 @@ def load_ui_config():
         return default_config
         
     except Exception as e:
-        print(f"{RED}** ALERT: UI config file missing or corrupted. Error: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: UI config file missing or corrupted. Error: {safe_error(e)} **{RESET}")
         secure_cleanup_common()  # Clean up before exit
         sys.exit(1)
 
@@ -514,7 +515,7 @@ def save_ui_config(config):
         os.replace(temp_file, "config.cfg")
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to save UI config: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
         if os.path.exists("config.cfg.tmp"):
             os.remove("config.cfg.tmp")
         raise
@@ -550,7 +551,7 @@ def load_ui_config():
         return default_config
         
     except Exception as e:
-        print(f"{RED}** ALERT: UI config file missing or corrupted. Error: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: UI config file missing or corrupted. Error: {safe_error(e)} **{RESET}")
         secure_cleanup_common()  # Clean up before exit
         sys.exit(1)
 
@@ -563,7 +564,7 @@ def wipe_sensitive_memory():
         # Clear local variables
         locals().clear()
     except Exception as e:
-        print(f"{RED}** Warning: Memory wiping failed: {str(e)} **{RESET}")
+        print(f"{RED}** Warning: Memory wiping failed: {safe_error(e)} **{RESET}")
 
 def cleanup_temp_files():
     """Remove temporary files created during operation"""
@@ -575,7 +576,7 @@ def cleanup_temp_files():
             if os.path.exists(file):
                 os.remove(file)
         except Exception as e:
-            print(f"{RED}** Warning: Failed to remove {file}: {str(e)} **{RESET}")
+            print(f"{RED}** Warning: Failed to remove {file}: {safe_error(e)} **{RESET}")
 
 def secure_cleanup_common():
     """Common cleanup operations shared by all exit scenarios"""
@@ -598,7 +599,7 @@ def secure_cleanup_common():
         if hasattr(vault, 'clear_vault'):
             vault.clear_vault()
     except Exception as e:
-        print(f"{RED}** ALERT: Error during cleanup: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Error during cleanup: {safe_error(e)} **{RESET}")
         # Continue with exit even if cleanup fails
 
 def timeoutCleanup():
@@ -608,7 +609,7 @@ def timeoutCleanup():
         secure_cleanup_common()
         os._exit(0)  
     except Exception as e:
-        print(f"{RED}Error during timeout cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during timeout cleanup: {safe_error(e)}{RESET}")
         os._exit(1)
 
 def timeoutInput(caption, timeout=60):
@@ -637,7 +638,7 @@ def timeoutInput(caption, timeout=60):
             return timeoutGlobalCode
             
     except Exception as e:
-        print(f"{RED}Error during timeout input: {str(e)}{RESET}")
+        print(f"{RED}Error during timeout input: {safe_error(e)}{RESET}")
         return timeoutGlobalCode
 
 def timeout_getpass(prompt, timeout=60):
@@ -666,7 +667,7 @@ def timeout_getpass(prompt, timeout=60):
             return None
             
     except Exception as e:
-        print(f"{RED}Error during timeout getpass: {str(e)}{RESET}")
+        print(f"{RED}Error during timeout getpass: {safe_error(e)}{RESET}")
         return None
         
 def setup_timeout() -> int:
@@ -708,7 +709,7 @@ def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifie
         decrypted = vault.decrypt_data(verifier, derived_key)
         return decrypted == b"BUNKER_VERIFIED"
     except Exception as e:
-        print(f"{RED}** ALERT: Verification failed: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Verification failed: {safe_error(e)} **{RESET}")
         return False
             
 def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifier: bytes) -> bool:
@@ -721,7 +722,7 @@ def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifie
         decrypted = vault.decrypt_data(verifier, derived_key)
         return decrypted == b"BUNKER_VERIFIED"
     except Exception as e:
-        print(f"{RED}** ALERT: Verification failed: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Verification failed: {safe_error(e)} **{RESET}")
         return False
         
 def vaultSetup():
@@ -843,10 +844,10 @@ def vaultSetup():
             return True
 
         except Exception as e:
-            print(f"{RED}** ALERT: Setup failed: {str(e)} **{RESET}")
+            print(f"{RED}** ALERT: Setup failed: {safe_error(e)} **{RESET}")
             return False
     except Exception as e:
-        print(f"{RED}** ALERT: Setup failed: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Setup failed: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Secure cleanup

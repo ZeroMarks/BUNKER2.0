@@ -1,5 +1,6 @@
 import base64, json, sys, getpass, os, gc, random, string, \
 platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
+from main.SECURE_IO import safe_error
 
 from typing import Optional, Dict, Any, Tuple, Union, List
 
@@ -126,7 +127,7 @@ class SecureVaultEnhanced:
             return key
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Key generation failed: {str(e)}")
+            raise ValueError(f"Key generation failed: {safe_error(e)}")
 
 
     
@@ -160,7 +161,7 @@ class SecureVaultEnhanced:
             
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Key derivation failed: {str(e)}")
+            raise ValueError(f"Key derivation failed: {safe_error(e)}")
               
     # Add compatibility methods for import/export operations
 
@@ -197,7 +198,7 @@ class SecureVaultEnhanced:
             raise FileNotFoundError(f"File not found: {filename}")
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Failed to load {filename}: {str(e)}") 
+            raise ValueError(f"Failed to load {filename}: {safe_error(e)}") 
     
     def verify_password_enhanced(self, password, salt, verifier):
         """Verify password using config data"""
@@ -231,7 +232,7 @@ class SecureVaultEnhanced:
                 
         except Exception as e:
             self.secure_wipe()
-            raise ValueError(f"Failed to save {filename}: {str(e)}")
+            raise ValueError(f"Failed to save {filename}: {safe_error(e)}")
         
     def secure_delete_on_failure(self):
         """Securely delete all sensitive files"""
@@ -310,7 +311,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("timeout_value", 60)
         except Exception as e:
-            raise ValueError(f"Failed to manage timeout: {str(e)}")
+            raise ValueError(f"Failed to manage timeout: {safe_error(e)}")
 
     def load_timeout_value(hashed_pass):
         """Load timeout value using shared UI config"""
@@ -329,7 +330,7 @@ class SecureVaultEnhanced:
             config = self.load_config(key)
             return config.get("max_attempts", 3)  # Default to 3 attempts
         except Exception as e:
-            raise ValueError(f"Failed to get max attempts: {str(e)}")
+            raise ValueError(f"Failed to get max attempts: {safe_error(e)}")
 
     def manage_last_exit(self, key, new_timestamp=None):
         """Handle last exit timestamp operations"""
@@ -341,7 +342,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("last_exit", None)
         except Exception as e:
-            raise ValueError(f"Failed to manage last exit: {str(e)}")
+            raise ValueError(f"Failed to manage last exit: {safe_error(e)}")
 
     def manage_config(self, hashed_pass, **updates):
         """Central function for all config operations"""
@@ -358,7 +359,7 @@ class SecureVaultEnhanced:
             
             return config
         except Exception as e:
-            raise ValueError(f"Failed to manage config: {str(e)}")
+            raise ValueError(f"Failed to manage config: {safe_error(e)}")
 
 
     def manage_settings(self, key, settings=None):
@@ -371,7 +372,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("settings", {"disable_ipv4": True})
         except Exception as e:
-            raise ValueError(f"Failed to manage settings: {str(e)}")
+            raise ValueError(f"Failed to manage settings: {safe_error(e)}")
 
     # Combined function for attempts management:
     def manage_attempts(self, key, new_attempts=None):
@@ -384,7 +385,7 @@ class SecureVaultEnhanced:
                 self.save_config(config, key)
             return config.get("attempts", 0)
         except Exception as e:
-            raise ValueError(f"Failed to manage attempts: {str(e)}")
+            raise ValueError(f"Failed to manage attempts: {safe_error(e)}")
 
     def save_config(self, config_data, hashed_pass):
         """Save configuration data (always encrypted)"""
@@ -397,7 +398,7 @@ class SecureVaultEnhanced:
             if os.name == 'posix':
                 os.chmod(self.config_file, 0o600)
         except Exception as e:
-            raise ValueError(f"Failed to save config: {str(e)}")
+            raise ValueError(f"Failed to save config: {safe_error(e)}")
 
     def load_config(self, hashed_pass):
         """Load configuration data (always decrypted)"""
@@ -410,7 +411,7 @@ class SecureVaultEnhanced:
         except FileNotFoundError:
             return self.create_default_config(key=hashed_pass)
         except Exception as e:
-            raise ValueError(f"Failed to load config: {str(e)}")
+            raise ValueError(f"Failed to load config: {safe_error(e)}")
 
     def create_default_config(self, key):
         """Create default configuration with all necessary values"""
@@ -458,7 +459,7 @@ def overwrite_db(new_contents):
                     os.chmod(backup_name, 0o600)
                 print(f"{GOLD}Created backup: {backup_name}{RESET}")
         except Exception as e:
-            print(f"{RED}Warning: Failed to create backup: {str(e)}{RESET}")
+            print(f"{RED}Warning: Failed to create backup: {safe_error(e)}{RESET}")
         
         # Ensure new_contents is in the correct format (bytes)
         if isinstance(new_contents, str):
@@ -484,7 +485,7 @@ def overwrite_db(new_contents):
         return True
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to overwrite database: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to overwrite database: {safe_error(e)} **{RESET}")
         
         # Try to restore from backup if write failed
         try:
@@ -539,7 +540,7 @@ def generate_export_encryption(passphrase):
         return fernet_key, salt, verifier
         
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to generate export encryption: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to generate export encryption: {safe_error(e)} **{RESET}")
         return None, None, None
       
 def verify_export_encryption(passphrase, salt, verifier):
@@ -580,8 +581,7 @@ def verify_export_encryption(passphrase, salt, verifier):
             return None
         
     except Exception as e:
-        # Log the error but don't expose it to the user
-        print(f"{RED}** DEBUG: Verification failed: {str(e)} **{RESET}")
+        # Verification failure is reported by the caller; no details here.
         return None
 
 def load_encrypted_file(filename, hashed_pass):
@@ -598,7 +598,7 @@ def load_encrypted_file(filename, hashed_pass):
     except FileNotFoundError:
         raise ValueError(f"File not found: {filename}")
     except Exception as e:
-        raise ValueError(f"Failed to load {filename}: {str(e)}")
+        raise ValueError(f"Failed to load {filename}: {safe_error(e)}")
 
 # timeoutInput(), timeoutCleanup(), timeout_getpass(), and setup_timeout() are now imported from SHARED_RESOURCES_MOBILE
 
@@ -623,7 +623,7 @@ def get_ui_key() -> Optional[bytes]:
         else:  # Linux and other Unix-like systems
             return _get_ui_key_linux()
     except Exception as e:
-        print(f"{GOLD}Warning: Could not retrieve UI key from secure storage: {str(e)}{RESET}")
+        print(f"{GOLD}Warning: Could not retrieve UI key from secure storage: {safe_error(e)}{RESET}")
         return None
 
 def set_ui_key(key: bytes) -> bool:
@@ -638,7 +638,7 @@ def set_ui_key(key: bytes) -> bool:
         else:  # Linux and other Unix-like systems
             return _set_ui_key_linux(key)
     except Exception as e:
-        print(f"{RED}Error: Could not store UI key in secure storage: {str(e)}{RESET}")
+        print(f"{RED}Error: Could not store UI key in secure storage: {safe_error(e)}{RESET}")
         return False
 
 def get_ui_meta() -> Optional[Dict[str, Any]]:
@@ -653,7 +653,7 @@ def get_ui_meta() -> Optional[Dict[str, Any]]:
         else:  # Linux and other Unix-like systems
             return _get_ui_meta_linux()
     except Exception as e:
-        print(f"{GOLD}Warning: Could not retrieve UI metadata: {str(e)}{RESET}")
+        print(f"{GOLD}Warning: Could not retrieve UI metadata: {safe_error(e)}{RESET}")
         return None
 
 def set_ui_meta(metadata: Dict[str, Any]) -> bool:
@@ -668,7 +668,7 @@ def set_ui_meta(metadata: Dict[str, Any]) -> bool:
         else:  # Linux and other Unix-like systems
             return _set_ui_meta_linux(metadata)
     except Exception as e:
-        print(f"{RED}Error: Could not store UI metadata: {str(e)}{RESET}")
+        print(f"{RED}Error: Could not store UI metadata: {safe_error(e)}{RESET}")
         return False
 
 # macOS implementation using Keychain Services
@@ -1036,7 +1036,7 @@ def timeoutCleanup():
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during timeout cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during timeout cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 def interruptCleanup():
@@ -1068,7 +1068,7 @@ def interruptCleanup():
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during interrupt cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during interrupt cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 def errorCleanup(error_message="An unexpected error occurred"):
@@ -1103,7 +1103,7 @@ def errorCleanup(error_message="An unexpected error occurred"):
         
     except Exception as e:
         # If any error occurs during cleanup, force exit
-        print(f"{RED}Error during error cleanup: {str(e)}{RESET}")
+        print(f"{RED}Error during error cleanup: {safe_error(e)}{RESET}")
         os._exit(1)  # Use exit code 1 for error exit
 
 # Global keyboard interrupt handler
@@ -1128,7 +1128,7 @@ def register_handlers():
             
         return True
     except Exception as e:
-        print(f"{RED}Warning: Could not register signal handlers: {str(e)}{RESET}")
+        print(f"{RED}Warning: Could not register signal handlers: {safe_error(e)}{RESET}")
         return False
 
 def setup_secure_exit_handlers():
@@ -1148,7 +1148,7 @@ def setup_secure_exit_handlers():
             keyboard_interrupt_handler(None, None)
         else:
             # For other exceptions, use the error cleanup
-            errorCleanup(f"Unhandled exception: {str(exc_value)}")
+            errorCleanup(f"Unhandled exception: {safe_error(exc_value)}")
     
     sys.excepthook = custom_excepthook
 
@@ -1159,7 +1159,7 @@ def getpass_thread(prompt, q):
         q.put(password)
     except Exception as e:
         # Put the error in the queue instead of the password
-        q.put(f"ERROR: {str(e)}")
+        q.put(f"ERROR: {safe_error(e)}")
 
 def timeout_getpass(prompt, timeout):
     """Get password with timeout and enhanced error handling"""
@@ -1213,7 +1213,7 @@ def fileSetup(hashed_pass):
         
         return salt, verifier, database
     except Exception as e:
-        print(f"{RED}** ALERT: Error loading security files: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Error loading security files: {safe_error(e)} **{RESET}")
         self_destruct()
 
 def saveDatabase(db, hashed_pass):
@@ -1235,10 +1235,10 @@ def saveDatabase(db, hashed_pass):
                 last_modified=str(datetime.datetime.now().timestamp())
             )
         except Exception as e:
-            print(f"{GOLD}Warning: Could not update config last_modified: {str(e)}{RESET}")
+            print(f"{GOLD}Warning: Could not update config last_modified: {safe_error(e)}{RESET}")
         return True
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to save database: {str(e)} **{RESET}")
+        print(f"{RED}** ALERT: Failed to save database: {safe_error(e)} **{RESET}")
         return False
     
 def loadDatabase(hashed_pass):
@@ -1275,8 +1275,8 @@ def loadDatabase(hashed_pass):
         return db
             
     except Exception as e:
-        print(f"{RED}** ALERT: Failed to load database: {str(e)} **{RESET}")
-        raise ValueError(f"Database format is invalid: {str(e)}")
+        print(f"{RED}** ALERT: Failed to load database: {safe_error(e)} **{RESET}")
+        raise ValueError(f"Database format is invalid: {safe_error(e)}")
 def load_max_attempts(hashed_pass):
     """Load max attempts using manage_config"""
     try:
@@ -1817,7 +1817,7 @@ def changeMasterPassword(hashed_pass, db):
                             print(f"{RED} ** ALERT: Invalid input. Please press 'enter' to continue or type 'r' to retry. **{RESET}")
                     continue
             except Exception as e:
-                print(f"{RED} ** ALERT: Error checking password: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error checking password: {safe_error(e)} **{RESET}")
                 return False
 
             # Generate new salt and key
@@ -1868,10 +1868,10 @@ def changeMasterPassword(hashed_pass, db):
                 sys.exit()
 
             except KeyError as ke:
-                print(f"{RED} ** ALERT: Could not change master password (Error code: 01). KeyError: {ke} **{RESET}")
+                print(f"{RED} ** ALERT: Could not change master password (Error code: 01). Missing field: {safe_error(ke)} **{RESET}")
                 return False
             except Exception as e:
-                print(f"{RED} ** ALERT: Could not change master password (Error code: 03). Error: {e} **{RESET}")
+                print(f"{RED} ** ALERT: Could not change master password (Error code: 03). Error: {safe_error(e)} **{RESET}")
                 return False
             finally:
                 if 'password_provided' in locals(): del password_provided
@@ -1880,7 +1880,7 @@ def changeMasterPassword(hashed_pass, db):
                 vault.secure_wipe()
 
     except Exception as e:
-        print(f"{RED} ** ALERT: An error occurred: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: An error occurred: {safe_error(e)} **{RESET}")
         return False
 
     
@@ -2041,10 +2041,10 @@ def changeAutoLogoutTimer(hashed_pass, db):
                     
             except Exception as e:
                 # Handle any errors with enhanced security
-                print(f"{RED} ** ALERT: Error changing timeout value: {str(e)} **{RESET}")
+                print(f"{RED} ** ALERT: Error changing timeout value: {safe_error(e)} **{RESET}")
                 return False
     except Exception as e:
-        print(f"{RED} ** ALERT: Failed to manage timeout settings: {str(e)} **{RESET}")
+        print(f"{RED} ** ALERT: Failed to manage timeout settings: {safe_error(e)} **{RESET}")
         return False
     finally:
         # Clean up sensitive data
@@ -2116,7 +2116,7 @@ def cleanupDatabase(hashed_pass, db):
             if note_count > 0:
                 print(f"{GREEN}** {note_count} invalid note entries removed **{RESET}")
         except Exception as e:
-            print(f"{RED} ** ALERT: Failed to update database. Error: {str(e)} **{RESET}")
+            print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
             return None
 
     return db

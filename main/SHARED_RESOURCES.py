@@ -558,34 +558,20 @@ def displayHeader(title):
 
 
 ###Helpers
-# Function to clear clipboard after a specified delay
-def clear_clipboard(delay):
-    """Clear clipboard after specified delay with error handling"""
-    try:
-        time.sleep(delay)
-        pyperclip.copy("")
-    except Exception as e:
-        print(f"{RED}Error clearing clipboard: {str(e)}{RESET}")
+# Clipboard handling lives in SECURE_IO so there is one timer and one rule:
+# copied secrets are cleared after 30 seconds and when BUNKER exits.
+def clear_clipboard(delay=0):
+    """Clear the clipboard now if it still holds a secret BUNKER copied."""
+    from main.SECURE_IO import clear_clipboard_if_ours
+    return clear_clipboard_if_ours()
 
 
-# Function to copy input to clipboard and start timer to clear clipboard
 def to_clipboard(input_to_copy):
-    """Copy data to clipboard with auto-clear timer and enhanced security"""
-    try:
-        # Convert input to string and copy to clipboard
-        pyperclip.copy(str(input_to_copy))
-        
-        # Create daemon thread to clear clipboard after delay
-        clear_thread = threading.Thread(
-            target=clear_clipboard, 
-            args=(30,),
-            daemon=True  # Make thread daemon so it won't prevent program exit
-        )
-        clear_thread.start()
-        
-        return f"{GREEN}\n** SUCCESS: Password was saved to clipboard. It will be removed from your clipboard after 30 seconds. **{RESET}"
-    except Exception as e:
-        return f"{RED}\n** ALERT: Failed to copy to clipboard: {str(e)} **{RESET}"
+    """Copy a secret to the clipboard with auto-clear. Returns a status message."""
+    from main.SECURE_IO import copy_secret, copy_notice
+    if copy_secret(input_to_copy):
+        return f"{GREEN}\n** SUCCESS: {copy_notice('Password')} **{RESET}"
+    return f"{RED}\n** ALERT: Failed to copy to clipboard. **{RESET}"
 
 
 # SYSTEM INFORMATION FUNCTIONS

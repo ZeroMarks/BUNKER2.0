@@ -580,6 +580,14 @@ def cleanup_temp_files():
 def secure_cleanup_common():
     """Common cleanup operations shared by all exit scenarios"""
     try:
+        # Clear any secret BUNKER put on the clipboard. Exit paths use
+        # os._exit(), which skips atexit, so this must happen here.
+        try:
+            from main.SECURE_IO import clear_clipboard_if_ours
+            clear_clipboard_if_ours()
+        except Exception:
+            pass
+
         # Wipe sensitive data in memory where possible
         wipe_sensitive_memory()
         

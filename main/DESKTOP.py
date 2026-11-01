@@ -4,6 +4,7 @@ import keyboard as kb
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
@@ -1480,9 +1481,9 @@ def displayFavorites(hashed_pass, db):
                                     )
                                     break
                                 elif copy_choice == "c":
-                                    pyperclip.copy(password)
+                                    _copied = copy_secret(password)
                                     print(
-                                        f"{GREEN}Password copied to clipboard! You can paste it with CTRL + V.{RESET}\n"
+                                        (f"{GREEN}{copy_notice('Password')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                                     )
                                     break
                                 elif copy_choice == ".c":
@@ -2129,9 +2130,9 @@ def findProfileData(hashed_pass, db):
                                 )
                                 break
                             elif option == "c":
-                                pyperclip.copy(password)
+                                _copied = copy_secret(password)
                                 print(
-                                    f"\n{GREEN}Password copied to clipboard! You can paste with CTRL + V.{RESET}\n"
+                                    (f"\n{GREEN}{copy_notice('Password')}{RESET}\n" if _copied else f"\n{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                                 )
                                 break
                             elif option == ".c" or option == timeoutGlobalCode:
@@ -2336,9 +2337,9 @@ def tagProfiles(hashed_pass, db):
                             )
                             break
                         elif option == "c":
-                            pyperclip.copy(password)
+                            _copied = copy_secret(password)
                             print(
-                                f"\n{GREEN}Password copied to clipboard! You can paste with CTRL + V.{RESET}\n"
+                                (f"\n{GREEN}{copy_notice('Password')}{RESET}\n" if _copied else f"\n{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                             )
                             break
                         elif option == ".c" or option == timeoutGlobalCode:
@@ -2480,8 +2481,8 @@ def readAllProfiles(hashed_pass, db):
                                 print(f"{GREEN}Password request granted! \n\n{DBLUE}Password:{RESET} {password}{RESET}\n")
                                 break
                             elif copy_choice == "c":
-                                pyperclip.copy(password)
-                                print(f"{GREEN}Password copied to clipboard! You can paste it with CTRL + V.{RESET}\n")
+                                _copied = copy_secret(password)
+                                print((f"{GREEN}{copy_notice('Password')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n"))
                                 break
                             elif copy_choice == ".c" or copy_choice == timeoutGlobalCode:
                                 return False if copy_choice != timeoutGlobalCode else True
@@ -2959,8 +2960,8 @@ def displayFavoriteNotes(hashed_pass, db):
                                         print(f"\n{GOLD}Full Note Content: {RESET}{decrypted_content}\n")
                                     break
                                 elif copy_choice == "c":
-                                    pyperclip.copy(decrypted_content)
-                                    print(f"{GREEN}Note content copied to clipboard! You can paste it with CTRL + V.{RESET}\n")
+                                    _copied = copy_secret(decrypted_content)
+                                    print((f"{GREEN}{copy_notice('Note content')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n"))
                                     break
                                 elif copy_choice == ".c":
                                     return False
@@ -3446,9 +3447,9 @@ def findNoteData(hashed_pass, db):
                                         print(f"\n{GOLD}Full Note Content: {RESET}{content}\n")
                                     break
                                 elif action == "c":
-                                    pyperclip.copy(content)
+                                    _copied = copy_secret(content)
                                     print(
-                                        f"{GREEN}Note content copied to clipboard! You can paste it with CTRL + V.{RESET}\n"
+                                        (f"{GREEN}{copy_notice('Note content')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                                     )
                                     break
                                 elif action == "r":
@@ -4856,9 +4857,9 @@ def tagNotes(hashed_pass, db):
                                         # Decrypt the content with enhanced security for copying
                                         decrypted_content = decode_and_decrypt("content", info, hashed_pass)
                                         
-                                        pyperclip.copy(decrypted_content)
+                                        _copied = copy_secret(decrypted_content)
                                         print(
-                                            f"{GREEN}Note content copied to clipboard! You can paste it with CTRL + V.{RESET}\n"
+                                            (f"{GREEN}{copy_notice('Note content')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                                         )
                                         break
                                     elif copy_choice == ".c":
@@ -5203,9 +5204,9 @@ def displayAllNotes(hashed_pass, db):
                                         print(f"{GOLD}Content: {RESET}{decrypted_content}\n")
                                     break
                                 elif copy_choice == "c":
-                                    pyperclip.copy(decrypted_content)
+                                    _copied = copy_secret(decrypted_content)
                                     print(
-                                        f"{GREEN}Note content copied to clipboard! You can paste it with CTRL + V.{RESET}\n"
+                                        (f"{GREEN}{copy_notice('Note content')}{RESET}\n" if _copied else f"{RED}** ALERT: Could not access the clipboard. **{RESET}\n")
                                     )
                                     break
                                 elif copy_choice == ".c":

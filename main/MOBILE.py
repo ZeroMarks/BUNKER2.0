@@ -9,6 +9,7 @@ FORANGE, FBLUE, FRED, GOLD, GREEN, RED, RESET, DPURPLE,
 MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN)
 
 from main.SHARED_RESOURCES_MOBILE import clear_screen, ModernUI
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error
 
 from main.SHARED_RESOURCES_MOBILE import (
     vault, save_ui_config, load_ui_config, load_salt,
@@ -561,10 +562,12 @@ def mobile_password_manager(hashed_pass, contents, device_type='mobile'):
                 idx = int(idx) - 1
                 if 0 <= idx < len(accounts):
                     password = decode_and_decrypt_secure('password', accounts[idx], hashed_pass)
-                    pyperclip.copy(password)
-                    vault_ui.ui.success_message("Password copied to clipboard")
-                    time.sleep(0.5)  # Short delay before clearing
-                    pyperclip.copy('')  # Clear clipboard after delay
+                    # Previously cleared after 0.5 s, too soon to paste. Now
+                    # cleared after 30 s or on exit, like the desktop UI.
+                    if copy_secret(password):
+                        vault_ui.ui.success_message(copy_notice("Password"))
+                    else:
+                        vault_ui.ui.error_message("Could not access the clipboard")
                 else:
                     vault_ui.ui.error_message("Invalid password number")
             except ValueError:

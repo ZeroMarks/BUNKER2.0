@@ -776,9 +776,11 @@ def vaultSetup():
             salt = os.urandom(SALT_SIZE)
             save_salt(salt)
 
-            # Derive key using password + salt (+ optional pepper)
-            pepper = os.environ.get("BUNKER_PEPPER", "")
-            derived_key = vault.derive_key_hybrid(password_provided, salt, password_provided)
+            # Derive the key exactly as the desktop login does (Argon2id +
+            # PBKDF2, INITIALIZE.vault). Imported here, not at module load,
+            # because INITIALIZE imports this module.
+            from main.INITIALIZE import vault as login_vault
+            derived_key = login_vault.derive_key_hybrid(password_provided, salt, password_provided)
             
             # Setup timeout
             timeout_value = setup_timeout()
@@ -797,19 +799,23 @@ def vaultSetup():
             # Save UI config with mobile-compatible encryption
             save_ui_config(ui_config)
 
-            # Create verifier
-            verifier = vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)
+            # bunker.cfg holds the salt and the password verifier; login
+            # reads it first. It was not written after the desktop/mobile
+            # split, so a new vault could never be opened.
+            config = {
+                "salt": base64.b64encode(salt).decode(),
+                "verifier": base64.b64encode(
+                    login_vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)).decode(),
+                "last_exit": str(datetime.datetime.now().timestamp()),
+                "timestamp": str(time.time()),
+            }
+            write_private_bytes(
+                "bunker.cfg",
+                login_vault.encrypt_data(json.dumps(config).encode(), derived_key))
 
-            # Initialize empty database
-            empty_db = {}
-            
-            # Save empty database
-            encrypted_db = vault.encrypt_data(json.dumps(empty_db).encode(), derived_key)
-            with open("Bunker.mmf", "wb") as f:
-                f.write(encrypted_db)
-
-            if os.name == 'posix':
-                os.chmod("Bunker.mmf", 0o600)
+            # Empty database, written last so a half-finished setup is redone
+            encrypted_db = login_vault.encrypt_data(json.dumps({}).encode(), derived_key)
+            write_private_bytes("Bunker.mmf", encrypted_db)
 
             clear_screen()
 

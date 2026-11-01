@@ -722,7 +722,8 @@ def vaultSetup():
         print(f"{RED}** ALERT: Vault files already exist in this folder "
               f"(bunker.salt / bunker.cfg), but Bunker.mmf could not be found. **{RESET}")
         print(f"{CYAN}BUNKER will not create a new vault over them. Put Bunker.mmf back, "
-              f"or move the old files elsewhere if you really want a new vault.{RESET}")
+              f"or move the old files elsewhere if you really want a new vault. "
+              f"See docs/RECOVERY.md.{RESET}")
         return False
     try:
         while True:

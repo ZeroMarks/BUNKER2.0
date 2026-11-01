@@ -3,6 +3,60 @@
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
 you should not need anything else to start. Last updated 2026-11-01.
 
+## 0. Vision and mandate
+
+**Vision.** BUNKER is a privacy-first password and notes vault that lives
+entirely on the user's own device: no cloud, no account, no tracking (see the
+README). It is free and source-available, so anyone can read exactly how
+their secrets are protected. That matters because a password manager is
+only as trustworthy as its worst failure. For BUNKER that means it must never
+leak a secret and never lose the user's data.
+
+**North star.** BUNKER should be the offline terminal vault a security team
+would recommend without caveats. Concretely, best in the world means:
+- strong, standard cryptography (it already has this);
+- exactly one, audited way for a secret to leave the vault;
+- no path where an error, crash or damaged file destroys or locks a vault;
+- every user flow tested end to end with real encryption, on Linux, macOS
+  and Windows;
+- an honest threat model, with documentation that claims only what the code
+  does;
+- usable with a screen reader and in plain terminals.
+
+**Next milestone: v2.0 release.** Done when:
+1. PRs #1 and #2 are reviewed and merged;
+2. CI is green on every OS and Python job;
+3. the CodeQL alerts are triaged and dismissed;
+4. the release notes match `main`;
+5. the maintainer has tagged v2.0 and published the release. That is the
+   maintainer's call, never an agent's.
+
+**Standing mandate for the next agent.** Work as a full top-tier security
+studio team:
+1. **Research first.** Learn how the best products and standards solve the
+   problem, and cite them.
+2. **Look through several lenses:** security, first-time user, returning
+   user, accessibility, reliability, long-term maintenance.
+3. **Walk the real user flows end to end** and fix every break and dead end.
+4. **Choose one strong concept** grounded in BUNKER's own docs and
+   decisions.
+5. **Build it to the detail.**
+6. **Verify like a strict critic:** tests, real runs, and an independent
+   reviewer on the final diff.
+
+Choose the model and effort for each agent, and record them. Changes go
+through pull requests only: never merge, tag, release, force-push or
+rewrite history. Defensive security only, and the repo is public.
+
+**How to resume (5 minutes):**
+1. Read this file.
+2. Check PRs #1 and #2: CI status, review comments, and whether either has
+   been merged.
+3. Check out the branch and run
+   `python3 -m unittest discover -s tests -t .` (and compile; see §3).
+4. Take the top item in §7 that is still open. Do it, push, and update the
+   PR table.
+
 ## 1. Goal and context
 
 BUNKER is a free, source-available, offline terminal password and notes

@@ -43,7 +43,7 @@ def main(device_type='desktop'):
         try:
             with open("Bunker.mmf", "rb"):
                 pass
-        except Exception:
+        except FileNotFoundError:
             check_terminal_size()
             clear_screen()
             print(title_art)
@@ -52,9 +52,13 @@ def main(device_type='desktop'):
             print(
                 f"{CYAN}\nBUNKER SETUP\n\nWelcome to Bunker!\n\n{GOLD}Detected device type: {device_type}{RESET}\n\n{RED}ALERT: Bunker.mmf was DESTROYED or not found in local directory... SETUP A NEW PASSWORD!{RESET}"
             )
-            # Perform vault setup
+            # Perform vault setup (it refuses if other vault files exist)
             if not vaultSetup():
                 return  # Return if setup was cancelled or failed
+        except Exception as e:
+            # Exists but cannot be opened (permissions, locked by another
+            # program...). Never treat that as "no vault" and run setup.
+            safe_exit(f"Bunker.mmf exists but cannot be opened ({safe_error(e)})")
 
         # If mobile or tablet, redirect to MOBILE.py
         if device_type in ['mobile', 'tablet']:

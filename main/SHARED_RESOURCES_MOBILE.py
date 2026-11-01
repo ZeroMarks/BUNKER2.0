@@ -712,6 +712,15 @@ def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifie
         
 def vaultSetup():
     """Setup vault with enhanced security"""
+    from main.VAULT_FILES import setup_allowed, write_new_vault
+    if not setup_allowed():
+        # Never create a new vault over an existing one: that replaces the
+        # salt and makes the existing vault impossible to open.
+        print(f"{RED}** ALERT: Vault files already exist in this folder "
+              f"(bunker.salt / bunker.cfg), but Bunker.mmf could not be found. **{RESET}")
+        print(f"{CYAN}BUNKER will not create a new vault over them. Put Bunker.mmf back, "
+              f"or move the old files elsewhere if you really want a new vault.{RESET}")
+        return False
     try:
         while True:
             setup_choice = input(f"\n{GOLD}Enter (.g) for simplified user guide, or (y/n) if you're ready to setup bunker password: {RESET}").lower()
@@ -772,9 +781,13 @@ def vaultSetup():
             break
 
         try:
-            # Generate salt and save it
+            # Ask every remaining question before anything is written to disk.
+            timeout_value = setup_timeout()
+            if timeout_value is None:
+                print(f"{GREEN}Operation cancelled...{RESET}")
+                return False
+
             salt = os.urandom(SALT_SIZE)
-            save_salt(salt)
 
             # Derive the key exactly as the desktop login does (Argon2id +
             # PBKDF2, INITIALIZE.vault). Imported here, not at module load,
@@ -782,11 +795,6 @@ def vaultSetup():
             from main.INITIALIZE import vault as login_vault
             derived_key = login_vault.derive_key_hybrid(password_provided, salt, password_provided)
             
-            # Setup timeout
-            timeout_value = setup_timeout()
-            if timeout_value is None:
-                print(f"{GREEN}Operation cancelled...{RESET}")
-                return False
 
             # Create initial UI config
             ui_config = {
@@ -795,9 +803,7 @@ def vaultSetup():
                 "disable_ipv4": True,
                 "current_timeout": timeout_value
             }
-            
-            # Save UI config with mobile-compatible encryption
-            save_ui_config(ui_config)
+
 
             # bunker.cfg holds the salt and the password verifier; login
             # reads it first. It was not written after the desktop/mobile
@@ -806,16 +812,17 @@ def vaultSetup():
                 "salt": base64.b64encode(salt).decode(),
                 "verifier": base64.b64encode(
                     login_vault.encrypt_data(b"BUNKER_VERIFIED", derived_key)).decode(),
+                "timeout_value": timeout_value,
                 "last_exit": str(datetime.datetime.now().timestamp()),
                 "timestamp": str(time.time()),
             }
-            write_private_bytes(
-                "bunker.cfg",
-                login_vault.encrypt_data(json.dumps(config).encode(), derived_key))
-
-            # Empty database, written last so a half-finished setup is redone
+            encrypted_config = login_vault.encrypt_data(json.dumps(config).encode(), derived_key)
             encrypted_db = login_vault.encrypt_data(json.dumps({}).encode(), derived_key)
-            write_private_bytes("Bunker.mmf", encrypted_db)
+            # Salt, config, integrity record, then the database; an
+            # interrupted setup is recognised and can be redone safely.
+            # UI settings are saved right after the salt: their key depends on it.
+            write_new_vault(salt, encrypted_config, encrypted_db,
+                            after_salt=lambda: save_ui_config(ui_config))
 
             clear_screen()
 

@@ -39,7 +39,7 @@ To run this project, you need Python 3 installed on your system:
 Go to the Python download page: https://www.python.org/downloads/
 
 ### 2. Select the Version
-Download the latest stable version of Python 3 (recommended)
+Download the latest stable version of Python 3 (recommended). BUNKER needs **Python 3.10 or newer**.
 
 ### 3. Choose Your Installer
 - **Windows:** Download the executable installer (`.exe`)
@@ -128,6 +128,13 @@ python3 -m unittest discover -s tests -t .
 - Configurable auto-logout (10-3600 seconds, or off)
 - Clipboard auto-clear after 30 seconds and on exit (only if it still holds what BUNKER copied)
 - Passwords and notes are shown only when you ask to view them
+
+---
+
+**What BUNKER protects against, and what it doesn't:** see the
+[threat model](/docs/THREAT_MODEL.md). In short, the failed-login limit stops
+someone using BUNKER at your keyboard, but a copy of your vault files can be
+attacked offline, so use a long master password.
 
 ---
 

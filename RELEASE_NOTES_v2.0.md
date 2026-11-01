@@ -48,15 +48,25 @@ a known limitation, it says so.
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.
-- **Failing to open the accounts or notes manager no longer wipes the
-  vault.** If reading the vault failed at that point, an error in the
-  fallback reached the handler that deletes the vault. BUNKER now shows the
-  error and returns to the menu. (Other unexpected errors can still delete
-  the vault; see Known limitations.)
+- **New vaults can be opened.** Since the desktop/mobile split, setup did not
+  write `bunker.cfg` and used a different key derivation than login, so a
+  newly created vault could not be opened (and the resulting error deleted
+  it). Setup now creates everything login needs.
+- **Only the failed-login limit deletes the vault.** Errors, crashes, Ctrl+C,
+  Ctrl+D and timeouts used to trigger self-destruct in several places; they
+  now close BUNKER and leave your files untouched. Only a wrong-password
+  attempt counts toward the limit. Tests enforce this.
+- **Safer file writes.** The salt, settings and key files are written
+  atomically and owner-only, so a crash mid-write can't leave a truncated
+  salt that would lock you out.
 - **Export files are readable only by you** (permissions 0600 on macOS and
   Linux), for both encrypted and plain-text exports. The file is written in
   full and then moved into place, so a failed export leaves an existing file
   untouched, and an export never writes through a symlink.
+- **Runs on Python 3.10 and newer.** A Python 3.12-only construct stopped
+  BUNKER from starting on 3.11 and older.
+- **Fixed in-app links.** The User Guide's support pages pointed to
+  placeholder and dead addresses.
 - **Leftover debug output removed.**
 - **Unused dependencies removed.** `keyboard` (a global keyboard hook) and
   `inputimeout` were imported but never used.
@@ -83,18 +93,26 @@ This release adds the project's first automated tests (standard-library
 python3 -m unittest discover -s tests -t .
 ```
 
-The tests cover clipboard clearing (including the timer and terminal-close
-cases), safe error text, export file permissions and the exit cleanup.
-The interactive menus are not covered by automated tests.
+The tests cover the first-run flow end to end with real encryption, the
+self-destruct policy, clipboard clearing (timer, outages, terminal close),
+safe error text, atomic and owner-only file writes, plain output, and a
+fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
+with Python 3.10-3.13, plus a dependency audit. Most interactive menus are
+not covered by automated tests.
+
+See `docs/THREAT_MODEL.md` for what BUNKER protects against and where that
+protection stops.
 
 ## Known limitations
 
 - **Plain-text export is available.** If you choose it, the exported JSON
   holds your passwords or notes unencrypted. Choose encrypted export unless
   you have a specific reason not to.
-- **The failed-login limit deletes the vault on purpose, and so do some
-  unexpected errors** (for example, a failure while opening the vault after
-  login). Keep an encrypted export as a backup.
+- **The failed-login limit deletes the vault on purpose.** There is no
+  recovery. Keep an encrypted export as a backup.
+- **The limit protects the app, not a copy of your files.** Someone who
+  copies the vault files can guess passwords offline; a long master password
+  is the real protection.
 - **No demo vault ships with this release.** On first run, BUNKER walks you
   through creating your own vault.
 - **Killing BUNKER with `kill -9`** (or a crash of Python itself) skips all

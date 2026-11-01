@@ -1,5 +1,5 @@
 import os, platform
-from main.SECURE_IO import safe_error
+from main.SECURE_IO import safe_error, write_private_bytes
 import importlib.util
 import time
 import sys
@@ -333,9 +333,8 @@ class SecureVaultEnhanced:
 vault = SecureVaultEnhanced()
 
 def save_salt(salt, filename="bunker.salt"):
-    """Save salt to file"""
-    with open(filename, "wb") as f:
-        f.write(salt)
+    """Save salt to file (atomic, owner-only)"""
+    write_private_bytes(filename, salt)
 
 def load_salt(filename="bunker.salt"):
     """Load salt from file"""
@@ -440,17 +439,8 @@ def save_ui_config(config):
         data = json.dumps(config).encode("utf-8")
         encrypted = vault.encrypt_data(data, key)
         
-        # Write to temporary file first
-        temp_file = "config.cfg.tmp"
-        with open(temp_file, "wb") as f:
-            f.write(encrypted)
-            
-        # Set secure permissions
-        if os.name == 'posix':
-            os.chmod(temp_file, 0o600)
-            
-        # Atomic replace
-        os.replace(temp_file, "config.cfg")
+        # Atomic, owner-only write (temp file + fsync + replace)
+        write_private_bytes("config.cfg", encrypted)
         
     except Exception as e:
         print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")
@@ -502,17 +492,8 @@ def save_ui_config(config):
         data = json.dumps(config).encode("utf-8")
         encrypted = vault.encrypt_data(data, key)
         
-        # Write to temporary file first
-        temp_file = "config.cfg.tmp"
-        with open(temp_file, "wb") as f:
-            f.write(encrypted)
-            
-        # Set proper permissions
-        if os.name == 'posix':
-            os.chmod(temp_file, 0o600)
-            
-        # Atomic replace
-        os.replace(temp_file, "config.cfg")
+        # Atomic, owner-only write (temp file + fsync + replace)
+        write_private_bytes("config.cfg", encrypted)
         
     except Exception as e:
         print(f"{RED}** ALERT: Failed to save UI config: {safe_error(e)} **{RESET}")

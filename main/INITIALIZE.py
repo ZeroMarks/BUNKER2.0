@@ -1,6 +1,6 @@
 import base64, json, sys, getpass, os, gc, random, string, \
 platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
-from main.SECURE_IO import safe_error
+from main.SECURE_IO import safe_error, write_private_bytes
 
 from typing import Optional, Dict, Any, Tuple, Union, List
 
@@ -222,13 +222,8 @@ class SecureVaultEnhanced:
             # Encrypt the data
             encrypted_data = self.encrypt_data(data, key)
             
-            # Write to file as bytes
-            with open(filename, 'wb') as f:
-                f.write(encrypted_data)
-                
-            # Set proper permissions on Unix-like systems
-            if os.name == 'posix':
-                os.chmod(filename, 0o600)
+            # Atomic, owner-only write
+            write_private_bytes(filename, encrypted_data)
                 
         except Exception as e:
             self.secure_wipe()
@@ -939,11 +934,7 @@ def _set_ui_key_linux_file(key: bytes) -> bool:
         for i, byte in enumerate(key):
             encrypted.append(byte ^ system_key[i % len(system_key)])
         
-        with open(key_file, 'wb') as f:
-            f.write(encrypted)
-        
-        # Set restrictive permissions
-        os.chmod(key_file, 0o600)
+        write_private_bytes(key_file, bytes(encrypted))
         return True
     except Exception:
         return False
@@ -983,11 +974,7 @@ def _set_ui_meta_linux_file(metadata: Dict[str, Any]) -> bool:
         for i, byte in enumerate(meta_json):
             encrypted.append(byte ^ system_key[i % len(system_key)])
         
-        with open(meta_file, 'wb') as f:
-            f.write(encrypted)
-        
-        # Set restrictive permissions
-        os.chmod(meta_file, 0o600)
+        write_private_bytes(meta_file, bytes(encrypted))
         return True
     except Exception:
         return False
@@ -997,8 +984,7 @@ def _set_ui_meta_linux_file(metadata: Dict[str, Any]) -> bool:
 # save_ui_config() is now imported from SHARED_RESOURCES_MOBILE
 
 def save_salt(salt, filename="bunker.salt"):
-    with open(filename, "wb") as f:
-        f.write(salt)
+    write_private_bytes(filename, salt)
 
 def load_salt(filename="bunker.salt"):
     with open(filename, "rb") as f:

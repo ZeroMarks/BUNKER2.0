@@ -201,6 +201,22 @@ class OpenPrivateTests(unittest.TestCase):
                 self.assertEqual(f.read(), "previous export")
             self.assertEqual(os.listdir(tmp), ["export.json"])
 
+    def test_write_private_bytes_atomic_and_private(self):
+        import os, stat, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bunker.salt")
+            SECURE_IO.write_private_bytes(path, b"\x01" * 32)
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), b"\x01" * 32)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            # A failure mid-write keeps the old content and leaves no temp file.
+            with self.assertRaises(TypeError):
+                SECURE_IO.write_private_bytes(path, object())
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), b"\x01" * 32)
+            self.assertEqual(os.listdir(tmp), ["bunker.salt"])
+
 
 class SignalTests(unittest.TestCase):
     def test_sigterm_clears_clipboard_before_exit(self):

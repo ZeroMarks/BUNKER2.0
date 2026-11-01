@@ -181,21 +181,20 @@ def safe_error(exc):
 
 
 @contextlib.contextmanager
-def open_private(path, encoding="utf-8"):
-    """Write ``path`` so only the owner can read it (0600 on POSIX).
+def _atomic_private(path, mode, encoding=None):
+    """Yield a file that atomically replaces ``path`` on success (mode 0600).
 
-    Used for exports, which may hold decrypted data. The data goes to a new
-    temporary file in the same folder (created exclusively, mode 0600), which
-    then replaces ``path``. This never follows a symlink at ``path``, never
-    changes another file's permissions, and leaves an existing file intact if
-    the export fails part-way.
+    Data goes to a new temp file in the same folder (created exclusively,
+    owner-only), is flushed to disk, then replaces ``path`` in one step. This
+    never follows a symlink at ``path``, never changes another file's
+    permissions, and on failure leaves the existing file untouched.
     """
     import os
     import tempfile
     folder = os.path.dirname(os.path.abspath(path))
-    fd, tmp = tempfile.mkstemp(prefix=".bunker-export-", suffix=".tmp", dir=folder)
+    fd, tmp = tempfile.mkstemp(prefix=".bunker-", suffix=".tmp", dir=folder)
     try:
-        with os.fdopen(fd, "w", encoding=encoding) as f:
+        with os.fdopen(fd, mode, encoding=encoding) as f:
             yield f
             f.flush()
             os.fsync(f.fileno())
@@ -206,6 +205,21 @@ def open_private(path, encoding="utf-8"):
         except OSError:
             pass
         raise
+
+
+def open_private(path, encoding="utf-8"):
+    """Text-mode private atomic write; used for exports."""
+    return _atomic_private(path, "w", encoding)
+
+
+def write_private_bytes(path, data):
+    """Atomically write ``data`` to ``path`` with owner-only permissions.
+
+    A crash or power loss leaves either the old file or the new one, never a
+    truncated mix, and the file is never readable by others, even briefly.
+    """
+    with _atomic_private(path, "wb") as f:
+        f.write(data)
 
 
 def install_exit_signal_handlers():

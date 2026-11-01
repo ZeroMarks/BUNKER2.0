@@ -1533,13 +1533,13 @@ def display_user_guide(hashed_pass, db):
                 f"{RESET}\nIf you encounter any issues or need further assistance, Here are the ways you can reach us:{RESET}\n\n"
                 + f"{MUSTARD}----- 💬 Support and Contact Information -----{RESET}\n\n"
                 + f"{MUSTARD}Email{RESET}: support@zeromarks.net\n"
-                + f"{MUSTARD}Website{RESET}: [www.zeromarks.net/support](http://www.zeromarks.net/support)\n\n"
+                + f"{MUSTARD}Website{RESET}: https://www.zeromarks.net\n\n"
                 + f"{RESET}For immediate assistance, please check our online resources:{RESET}\n\n"
                 + "\n".join(
                     [
-                        f"{MUSTARD}FAQs{RESET}: Visit our [Frequently Asked Questions](http://www.zeromarksllc.com/faqs) page for quick answers.",
-                        f"{MUSTARD}User Guide{RESET}: Explore our comprehensive [User Guide](http://www.zeromarksllc.com/user-guide) for detailed instructions.",
-                        f"{MUSTARD}Community Forum{RESET}: Join our [Community Forum](http://www.zeromarksllc.com/forum) to ask questions and share tips.",
+                        f"{MUSTARD}User Guide{RESET}: You're reading it. Open it any time from the MAIN MENU with (g).",
+                        f"{MUSTARD}README & Release Notes{RESET}: https://github.com/ZeroMarks/BUNKER2.0",
+                        f"{MUSTARD}Security issues{RESET}: email support@zeromarks.net (please don't post them publicly).",
                     ]
                 )
                 + "\n\n"
@@ -1549,14 +1549,14 @@ def display_user_guide(hashed_pass, db):
                 + "\n".join(
                     [
                         f"{GOLD}• {MUSTARD}\n**Other Media:** ",
-                        f"{GOLD}• {MUSTARD}[Website] |{RESET} http://www.zeromarks.net ",
+                        f"{GOLD}• {MUSTARD}[Website] |{RESET} https://www.zeromarks.net ",
                         f"{GOLD}• {MUSTARD}[Youtube] |{RESET} https://www.youtube.com/@ZEROMARKSLLC",
-                        f"{GOLD}• {MUSTARD}[Reddit] |{RESET} https://www.reddit.com/zeromarksllc",
-                        f"{GOLD}• {MUSTARD}[Github] |{RESET} https://www.github.com/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[Reddit] |{RESET} https://www.reddit.com/r/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[Github] |{RESET} https://github.com/ZeroMarks",
                         f"{GOLD}• {MUSTARD}\n **Social Media:** ",
                         f"{GOLD}• {MUSTARD}[Twitter / X] |{RESET} https://x.com/ZEROMARKSLLC",
                         f"{GOLD}• {MUSTARD}[Instagram] |{RESET} https://www.instagram.com/zeromarksllc",
-                        f"{GOLD}• {MUSTARD}[TikTok] |{RESET} https://www.tiktok.com/zeromarksllc",
+                        f"{GOLD}• {MUSTARD}[TikTok] |{RESET} https://www.tiktok.com/@zeromarksllc",
                         f"{GOLD}• {MUSTARD}[LinkedIn] |{RESET} https://www.linkedin.com/in/zeromarksllc",
                     ]
                 )
@@ -1646,9 +1646,8 @@ def display_user_guide(hashed_pass, db):
                 + f"{L_CYAN}We welcome contributions from the community. Here's how you can get involved:{RESET}\n\n"
                 + "\n".join(
                     [
-                        f"{GOLD}• {L_CYAN}Report Issues{RESET}: Found a bug? Report it on our [issue tracker](https://example.com/issues).",
-                        f"{GOLD}• {L_CYAN}Feature Requests{RESET}: Have a suggestion for a new feature? Submit it through our [feature request form](https://example.com/feature-request).",
-                        f"{GOLD}• {L_CYAN}Community Support{RESET}: Join our [community forum](https://example.com/forum) to help other users and share your ideas.",
+                        f"{GOLD}• {L_CYAN}Report Issues{RESET}: Found a bug? Open an issue at https://github.com/ZeroMarks/BUNKER2.0/issues (security issues: email support@zeromarks.net instead).",
+                        f"{GOLD}• {L_CYAN}Feature Requests{RESET}: Have a suggestion for a new feature? Open an issue at https://github.com/ZeroMarks/BUNKER2.0/issues.",
                     ]
                 )
                 + "\n\n"

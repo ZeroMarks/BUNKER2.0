@@ -1217,7 +1217,7 @@ def fileSetup(hashed_pass):
         return salt, verifier, database
     except Exception as e:
         print(f"{RED}** ALERT: Error loading security files: {safe_error(e)} **{RESET}")
-        self_destruct()
+        raise
 
 def saveDatabase(db, hashed_pass):
     """Save database with enhanced security"""
@@ -1257,9 +1257,9 @@ def loadDatabase(hashed_pass):
     try:
         # Check if database file exists
         if not os.path.exists("Bunker.mmf"):
-            print(f"{GOLD}Database file does not exist. Creating new empty database.{RESET}")
-            self_destruct()
-            return {}
+            # Used to call self_destruct() here, deleting the config and
+            # salt as well. A missing file is an error, not a reason to wipe.
+            raise FileNotFoundError("Bunker.mmf not found")
             
         # Read the encrypted database in binary mode
         with open("Bunker.mmf", "rb") as f:
@@ -1321,8 +1321,8 @@ def display_setup_guide():
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker Setup Guide -----{RESET}\n\n"
-            f"{RESET}Our unique bunker-style approach guarantees that your saved data is automatically deleted if tampering is detected or any unauthorized changes are made. "
-            f"Additionally, the application will self-destruct after three incorrect password attempts, providing unparalleled protection.{RESET}\n\n"
+            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
@@ -1428,8 +1428,8 @@ def display_user_guide(hashed_pass, db):
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker User Guide -----{RESET}\n\n"
-            f"{RESET}Our unique bunker-style approach guarantees that your saved data is automatically deleted if tampering is detected or any unauthorized changes are made. "
-            f"Additionally, the application will self-destruct after three incorrect password attempts, providing unparalleled protection.{RESET}\n\n"
+            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
@@ -1518,7 +1518,7 @@ def display_user_guide(hashed_pass, db):
                 f"\n{RESET}Welcome to {CYAN}ZEROMARKSLLC{RESET}, where we prioritize your security and privacy with cutting-edge technologies and thoughtful features. Trust and security are woven into every line of code. We empower you with a robust platform to manage your sensitive information confidently and privately.\n\n{RESET}"
                 + f"{LPURPLE}Fortified Encryption Protocols{RESET}: Your data is shielded by advanced encryption algorithms that meet industry standards, ensuring it remains confidential and unreadable to unauthorized access.\n"
                 + f"\n{LPURPLE}Zero Exposure to Cloud Risks{RESET}: We champion your privacy by storing all sensitive information strictly on your local device. This approach eliminates vulnerabilities associated with cloud-based storage.\n"
-                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: Our application includes intelligent tamper detection. If any unauthorized attempt is detected, all stored data is instantly purged, safeguarding your information from breaches.\n"
+                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: After three incorrect master password attempts, all stored data is permanently deleted. Nothing else triggers this.\n"
                 + f"\n{LPURPLE}Innovative Password Management{RESET}: Enjoy hassle-free security with features like an auto-logout timer that activates after periods of inactivity and a robust password generator that crafts strong, unique passwords tailored to each account.\n"
                 + f"\n{LPURPLE}Secure Note Repository{RESET}: Store and manage important notes securely alongside passwords, ensuring easy access while maintaining the highest levels of data protection.\n"
                 + f"\n{LPURPLE}Continuous Vigilance{RESET}: We are committed to staying ahead of threats. Our team constantly updates our security protocols and application features to shield you from evolving cyber risks.\n\n"

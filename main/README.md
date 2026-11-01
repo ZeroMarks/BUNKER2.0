@@ -140,7 +140,7 @@ This application is built for **educational purposes**. Use BUNKER 2.0 at your o
 
 
 **Other Issues:**
-If you experience different errors, please reach out through our social media channels for support.
+If you run into other errors, email **support@zeromarks.net**. To report a security issue, use the same address and please do not open a public issue.
 
 ---
 
@@ -149,7 +149,7 @@ If you experience different errors, please reach out through our social media ch
 **Official Channels:**
 - **Website:** [zeromarks.net](http://www.zeromarks.net)
 - **YouTube:** [@ZEROMARKSLLC](https://www.youtube.com/@ZEROMARKSLLC)
-- **GitHub:** [github.com/zeromarksllc](https://www.github.com/zeromarksllc)
+- **GitHub:** [github.com/ZeroMarks](https://github.com/ZeroMarks)
 - **Reddit:** [r/zeromarksllc](https://www.reddit.com/r/zeromarksllc)
 
 **Social Media:**

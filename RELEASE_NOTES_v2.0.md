@@ -35,7 +35,7 @@ a known limitation, it says so.
   Only real temporary files are removed now. A regression test covers this.
 - **Copied secrets are cleared from the clipboard.** Every password or note
   you copy is cleared after 30 seconds and again when BUNKER exits, including
-  timeout and Ctrl+C. If you have copied something else in the meantime,
+  timeout, Ctrl+C and closing the terminal window (on macOS and Linux). If you have copied something else in the meantime,
   BUNKER leaves it alone. Before this fix, most desktop copy actions never
   cleared the clipboard, and the mobile one cleared it after half a second,
   too fast to paste.
@@ -45,6 +45,12 @@ a known limitation, it says so.
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.
+- **A failed action in the main menu no longer wipes the vault.** If opening
+  the password or notes manager failed, an error in the fallback reached
+  the handler that deletes the vault. BUNKER now shows the error and returns
+  to the menu.
+- **Export files are readable only by you** (permissions 0600 on macOS and
+  Linux), for both encrypted and plain-text exports.
 - **Leftover debug output removed.**
 - **Vault files are git-ignored**, so a local vault, salt or backup can't be
   committed by accident.
@@ -66,7 +72,8 @@ This release adds the project's first automated tests (standard-library
 python3 -m unittest discover -s tests -t .
 ```
 
-The tests cover clipboard clearing, safe error text and the exit cleanup.
+The tests cover clipboard clearing (including the timer and terminal-close
+cases), safe error text, export file permissions and the exit cleanup.
 The interactive menus are not covered by automated tests.
 
 ## Known limitations
@@ -74,9 +81,15 @@ The interactive menus are not covered by automated tests.
 - **Plain-text export is available.** If you choose it, the exported JSON
   holds your passwords or notes unencrypted. Choose encrypted export unless
   you have a specific reason not to.
-- **The failed-login limit and some error paths delete the vault on
-  purpose.** Keep an encrypted export as a backup.
+- **The failed-login limit deletes the vault on purpose, and so do some
+  unexpected errors** (for example, a failure while opening the vault after
+  login). Keep an encrypted export as a backup.
 - **No demo vault ships with this release.** On first run, BUNKER walks you
   through creating your own vault.
+- **Killing BUNKER with `kill -9`** (or a crash of Python itself) skips all
+  cleanup, so a password copied less than 30 seconds earlier stays on the
+  clipboard.
+- **Security reports:** email support@zeromarks.net instead of opening a
+  public issue.
 - BUNKER is provided as-is, for educational purposes, with no warranty.
   See `Read Me/LICENSE.txt`.

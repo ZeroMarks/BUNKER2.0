@@ -10,6 +10,12 @@ __pycache__/
 Bunker.mmf
 bunker.cfg
 bunker.salt
+# Settings and integrity record BUNKER writes next to the vault. A copy committed
+# from a previous run stops a new install from starting (settings are tied to
+# the salt), so they must never be tracked.
+config.cfg
+bunker.chk
+*.prev
 *.bak.*
 # Exports and saved network reports written by the app.
 network_info_*.txt

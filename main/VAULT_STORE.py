@@ -18,7 +18,6 @@ does not understand are passed through untouched.
 import base64
 import json
 import os
-import tempfile
 import uuid
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -42,52 +41,21 @@ def decrypt_bytes(blob, key):
 
 
 def derive_key(password, salt):
-    """Key derivation used by the desktop UI (Argon2id, then PBKDF2-SHA3-256,
-    password also used as pepper). Use this so every UI derives the same key
-    for the same password and salt."""
-    from argon2.low_level import hash_secret_raw, Type
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    peppered = (password + password).encode()
-    raw = hash_secret_raw(secret=peppered, salt=salt, time_cost=3,
-                          memory_cost=102400, parallelism=8, hash_len=32,
-                          type=Type.ID)
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA3_256(), length=32, salt=salt,
-                     iterations=110000)
-    return base64.urlsafe_b64encode(kdf.derive(raw))
+    """The key the desktop login derives (Argon2id, then PBKDF2-SHA3-256,
+    password also used as pepper). Delegates to INITIALIZE so there is one
+    implementation; imported lazily because INITIALIZE imports this module."""
+    from main.INITIALIZE import vault as login_vault
+    return login_vault.derive_key_hybrid(password, salt, password)
 
 
 # --- file I/O
 
 def write_bytes_atomic(path, data):
-    """Replace ``path`` with ``data`` so it is either the old or the new
-    content, never a truncated mix: temp file in the same folder (mkstemp,
-    mode 0600), flush + fsync, then os.replace. On any failure the temp file
-    is removed and the existing file is left as it was."""
-    path = os.fspath(path)
-    folder = os.path.dirname(os.path.abspath(path))
-    fd, tmp = tempfile.mkstemp(prefix=".bunker-vault-", suffix=".tmp", dir=folder)
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        raise
-    # Make the rename itself durable (best effort; not available on Windows).
-    try:
-        dfd = os.open(folder, os.O_RDONLY)
-        try:
-            os.fsync(dfd)
-        finally:
-            os.close(dfd)
-    except OSError:
-        pass
+    """Replace ``path`` with ``data`` atomically and owner-only (0600): it is
+    either the old or the new content, never a truncated mix. Shared with
+    the salt/config writers via SECURE_IO.write_private_bytes."""
+    from main.SECURE_IO import write_private_bytes
+    write_private_bytes(os.fspath(path), data)
 
 
 def load(hashed_pass, path=DB_FILE):

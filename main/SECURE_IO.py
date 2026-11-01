@@ -224,7 +224,8 @@ def write_private_bytes(path, data):
     """Atomically write ``data`` to ``path`` with owner-only permissions.
 
     A crash or power loss leaves either the old file or the new one, never a
-    truncated mix, and the file is never readable by others, even briefly.
+    truncated mix. On macOS/Linux the file is owner-only (0600) from the
+    moment it is created; on Windows, permissions follow the folder.
     """
     with _atomic_private(path, "wb") as f:
         f.write(data)

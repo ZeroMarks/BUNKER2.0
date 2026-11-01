@@ -555,7 +555,10 @@ def cleanup_temp_files():
     """Remove temporary files created during operation"""
     # Only true temporaries belong here. bunker.salt and Bunker.mmf are the
     # vault itself: deleting them on exit makes the vault unrecoverable.
-    temp_files = ["config.cfg.tmp", "vault.tmp"]
+    import glob
+    # Leftovers from an interrupted atomic write (SECURE_IO) are temporary
+    # by definition and may hold plaintext of an unfinished export.
+    temp_files = ["config.cfg.tmp", "vault.tmp"] + glob.glob(".bunker-*.tmp")
     for file in temp_files:
         try:
             if os.path.exists(file):

@@ -20,7 +20,7 @@ from SHARED_RESOURCES_MOBILE import (
     MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN,
     clear_screen, ModernUI, detect_device
 )
-from main.SECURE_IO import install_exit_signal_handlers
+from main.SECURE_IO import install_exit_signal_handlers, safe_error
 
 def load_interface_module(module_name):
     """Safely load a Python module by name"""
@@ -31,7 +31,7 @@ def load_interface_module(module_name):
         spec.loader.exec_module(module)
         return module
     except Exception as e:
-        print(f"{RED}Failed to load {module_name}: {str(e)}{RESET}")
+        print(f"{RED}Failed to load {module_name}: {safe_error(e)}{RESET}")
         return None
 
 # BUNKER.py
@@ -57,7 +57,7 @@ def main():
                 time.sleep(1)
                 return mobile_main(device_type)
             except Exception as e:
-                print(f"{RED}Failed to load mobile interface: {str(e)}{RESET}")
+                print(f"{RED}Failed to load mobile interface: {safe_error(e)}{RESET}")
                 return False
         else:
             print(f"{GREEN}Detected desktop device. Using standard interface...{RESET}")
@@ -66,11 +66,11 @@ def main():
                 time.sleep(1)
                 return desktop_main(device_type)
             except Exception as e:
-                print(f"{RED}Failed to load desktop interface: {str(e)}{RESET}")
+                print(f"{RED}Failed to load desktop interface: {safe_error(e)}{RESET}")
                 return False
                 
     except Exception as e:
-        print(f"{RED}An error occurred: {str(e)}{RESET}")
+        print(f"{RED}An error occurred: {safe_error(e)}{RESET}")
         return False
 
 # RUN PROGRAM

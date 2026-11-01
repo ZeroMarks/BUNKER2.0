@@ -25,7 +25,9 @@ a known limitation, it says so.
   passphrase (yours or a generated one) or as plain text.
 - **Auto-logout** after a configurable period of inactivity.
 - **Failed-login limit.** After the configured number of wrong master
-  passwords, the vault files are overwritten and deleted. There is no recovery.
+  passwords, the vault files are overwritten and deleted, and BUNKER cannot
+  recover them. (On SSDs and copy-on-write file systems old blocks may
+  survive; see the threat model.)
 - **Plain output option.** Set `NO_COLOR=1` to run without colours
   ([NO_COLOR](https://no-color.org) convention), useful with screen readers
   and when logging.
@@ -54,11 +56,25 @@ a known limitation, it says so.
   it). Setup now creates everything login needs.
 - **Only the failed-login limit deletes the vault.** Errors, crashes, Ctrl+C,
   Ctrl+D and timeouts used to trigger self-destruct in several places; they
-  now close BUNKER and leave your files untouched. Only a wrong-password
-  attempt counts toward the limit. Tests enforce this.
-- **Safer file writes.** The salt, settings and key files are written
-  atomically and owner-only, so a crash mid-write can't leave a truncated
-  salt that would lock you out.
+  now close BUNKER and leave your files untouched.
+- **Damaged files are not wrong passwords.** A damaged or mismatched
+  `bunker.cfg`/`bunker.salt` used to make even the correct password count
+  as a failed attempt, so three correct logins could destroy the vault. A
+  new integrity record (`bunker.chk`) lets BUNKER tell the two apart; only
+  wrong passwords on verified files count. Real-crypto tests cover this.
+- **Changing the master password no longer makes every entry unreadable.**
+  Only the outer file used to be re-encrypted; every password and note
+  stayed under the old key. All fields are now re-encrypted, and the files
+  are swapped together with the old ones kept until everything succeeded.
+- **Setup never overwrites an existing vault.** It used to start whenever
+  `Bunker.mmf` could not be opened (e.g. locked by another program) and
+  replaced the salt before its last question.
+- **Mobile login checks passwords like desktop** and shares the same
+  attempt counter.
+- **Safer file writes.** The salt, config, settings and key files are
+  written atomically and owner-only, so a crash mid-write can't leave a
+  truncated file that would lock you out. (Atomic writes for the vault
+  database itself are in a follow-up change.)
 - **Export files are readable only by you** (permissions 0600 on macOS and
   Linux), for both encrypted and plain-text exports. The file is written in
   full and then moved into place, so a failed export leaves an existing file
@@ -108,8 +124,13 @@ protection stops.
 - **Plain-text export is available.** If you choose it, the exported JSON
   holds your passwords or notes unencrypted. Choose encrypted export unless
   you have a specific reason not to.
-- **The failed-login limit deletes the vault on purpose.** There is no
-  recovery. Keep an encrypted export as a backup.
+- **The failed-login limit deletes the vault on purpose.** BUNKER cannot
+  recover it. Keep an encrypted export as a backup.
+- **The mobile interface can view but not yet save changes** in this
+  release; that is fixed in a follow-up change.
+- **Deleting `config.cfg` resets the failed-attempt counter.** Someone who
+  can change files in the BUNKER folder can do that (they could also just
+  delete the vault).
 - **The limit protects the app, not a copy of your files.** Someone who
   copies the vault files can guess passwords offline; a long master password
   is the real protection.

@@ -41,13 +41,13 @@ concern for AES-GCM.
 | # | Adversary | In scope? | What protects you |
 |---|---|---|---|
 | A1 | Someone who **copies your vault files** (stolen laptop, backup, cloud folder) | Yes | Encryption + Argon2id. They can guess passwords **offline at their own speed**; the failed-login limit does not apply to a copy. **Your master password's strength is the real defence.** |
-| A2 | Someone **at your keyboard** while BUNKER is locked | Yes | Master password; after the failed-login limit (3) the vault is overwritten and deleted. |
+| A2 | Someone **at your keyboard** while BUNKER is locked | Partly | Master password. After 3 wrong passwords (counted the same way in the desktop and mobile interfaces) the vault is overwritten and deleted. Someone who can also change files in the BUNKER folder can reset the counter by deleting `config.cfg` (see §6). |
 | A3 | Someone at your keyboard **after you walk away unlocked** | Partly | Auto-logout (10–3600 s, or off). Passwords and notes are shown only when you ask; copied secrets leave the clipboard after 30 s and when BUNKER exits or the terminal closes. |
 | A4 | Other **apps reading the clipboard** | Partly | Clipboard clearing (above). Clipboard managers and history tools can still keep a copy; see §6. |
 | A5 | Other **local user accounts** on the same machine | Yes | Vault, salt, settings and export files are written owner-only (0600) on macOS/Linux. |
 | A6 | **Shoulder surfing / screen recording** | Partly | Password input is hidden unless you choose to show it; secrets are revealed only on request. The password-strength checker shows what you type. |
 | A7 | **Malware running as you**, or root/admin | No | It can read memory, log keystrokes and read your files. No local password manager can defend against this. |
-| A8 | **Crashes, power loss, bugs** | Yes | The salt, settings, key and export files are written atomically (atomic vault writes are in a follow-up change). Errors, Ctrl+C, EOF and timeouts never delete the vault (enforced by tests); only the failed-login limit does. |
+| A8 | **Crashes, power loss, damaged files, bugs** | Yes | Salt, config, settings, key and export files are written atomically (the vault database itself in a follow-up change). `bunker.chk` records hashes of the salt and config, so damaged or mismatched files are reported instead of being counted as wrong passwords. Errors, Ctrl+C, EOF and timeouts never delete the vault; only 3 wrong passwords on verified files do. Real-crypto tests cover these cases. |
 
 ## 5. Design rules the code enforces
 
@@ -55,8 +55,18 @@ concern for AES-GCM.
   puts a secret on screen (`reveal_secret`) or the clipboard (`copy_secret`).
   Errors are shown with `safe_error`, which never includes exception text.
 - **Deliberate destruction only.** `self_destruct()` has exactly one call
-  site, guarded by `attempts >= max_attempts`. A test fails if a second
-  call site appears.
+  site, guarded by `attempts >= max_attempts` and by the files being
+  verified intact (`bunker.chk`). A test fails if a second call site
+  appears or a guard is removed.
+- **Damage is not a wrong password.** AES-GCM reports a wrong key and a
+  damaged file the same way, so login first checks `bunker.chk`. Only a
+  failure on verified files counts as an attempt. A vault from before this
+  record existed gets one at its next successful login and is never
+  destroyed until then.
+- **Never overwrite a vault.** Setup only runs where no vault files exist
+  (or an earlier setup was interrupted), and asks every question before
+  writing. Changing the master password re-encrypts every field and swaps
+  all files together, keeping the old ones until every write succeeded.
 - **Atomic, private writes** (0600 temp file, fsync, rename) for the salt,
   settings, key and export files.
 - **Vault data never leaves the machine.** BUNKER's only network use is
@@ -69,7 +79,8 @@ concern for AES-GCM.
 
 1. **Offline guessing (A1).** If someone copies your files, only the master
    password and Argon2id stand in the way. Use a long passphrase.
-2. **Settings are only obfuscated, not secret.** `config.cfg`, and on Linux
+2. **Settings are only obfuscated, not secret.** This includes the
+   failed-attempt counter: deleting `config.cfg` resets it. `config.cfg`, and on Linux
    without a Secret Service the `~/.bunker_ui_key` fallback, are keyed from
    machine details (machine ID, hostname, OS, home path). Anyone who can read
    your files on that machine can rewrite them, including the failed-attempt
@@ -84,12 +95,18 @@ concern for AES-GCM.
    so a secret copied less than 30 seconds earlier stays on the clipboard.
 6. **Plain-text export** writes your data unencrypted, by design, when you
    choose it.
-7. **Optional pepper.** `BUNKER_PEPPER` falls back to a fixed public default,
-   so in practice it adds nothing unless set. Changing it would make existing
-   vaults unreadable, so it is left as is.
+7. **No pepper.** The code defines a `BUNKER_PEPPER` setting but never uses
+   it; setting it has no effect. (The "pepper" argument passed to the key
+   derivation is the password itself.) Adding a real pepper would make
+   existing vaults unreadable, so it is left as a decision for later.
 8. **Dependencies.** BUNKER relies on `cryptography`, `argon2-cffi`,
    `pyperclip`, `psutil` and `requests` (see `requirements.txt`); a flaw in
    one of them affects BUNKER. CI runs `pip-audit` against known advisories.
+
+9. **Deletion is best effort.** Self-destruct overwrites and deletes the
+   files, but on SSDs and copy-on-write file systems (APFS, Btrfs, ZFS) old
+   blocks may survive, and backups made by other tools are out of reach.
+   Treat the vault as gone for BUNKER, not as forensically erased.
 
 ## 7. Verifying these claims
 

@@ -133,7 +133,7 @@ python3 -m unittest discover -s tests -t .
 
 **What BUNKER protects against, and what it doesn't:** see the
 [threat model](/docs/THREAT_MODEL.md). In short, the failed-login limit stops
-someone using BUNKER at your keyboard, but a copy of your vault files can be
+casual guessing at your keyboard, but a copy of your vault files can be
 attacked offline, so use a long master password.
 
 ---

@@ -54,8 +54,10 @@ def _clipboard():
 
 
 # Random key for this process only. The fingerprint is an HMAC under it, so
-# even someone who can read BUNKER's memory cannot use the fingerprint to
-# test password guesses offline; it only answers "is this the same text?".
+# it is useless outside this process (a leaked log, core dump fragment or
+# swap page holding just the fingerprint cannot be used to test guesses).
+# Someone who can read this process's whole memory has the key as well -
+# and the clipboard itself - so this does not defend against that.
 _FINGERPRINT_KEY = os.urandom(32)
 
 

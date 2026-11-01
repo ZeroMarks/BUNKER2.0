@@ -58,6 +58,21 @@ a known limitation, it says so.
   you declined to see network details. It now does so only after you answer
   yes to "Look up your public IP online?"; the local IP is read from your
   network interfaces without any request.
+- **Imports check the file first.** Importing notes while the vault was
+  not loaded used to replace the whole vault with just the imported notes;
+  it now refuses. Every export file is checked before anything is saved:
+  damaged, oversized or wrong-format files are refused with a plain reason,
+  and entries with missing or wrong-typed fields are skipped and listed.
+  If saving fails, nothing changes. A timeout during an import now logs you
+  out instead of looping.
+- **Re-importing doesn't create duplicates.** Entries already in your vault
+  are skipped, and nothing is ever overwritten. A profile with the same site
+  and login but a different password is added next to the old one, and the
+  import tells you so.
+- **The import preview shows hidden terminal codes.** Escape sequences in
+  an export file are shown as visible codes in the import preview instead of
+  being sent to your terminal, and the import tells you which entries have
+  them. (The other screens do not escape them yet.)
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.

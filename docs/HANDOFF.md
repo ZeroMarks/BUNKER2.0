@@ -1,7 +1,12 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-10-31 (PT).
+you should not need anything else to start. Last updated 2026-10-31 (PT), import work 2026-10-31 night (PT).
+
+**Next three moves:** (1) keep CI green on both PRs once the waiting
+commits are pushed; (2) escape terminal control characters on every
+screen that shows stored text, not just the import preview; (3) move
+desktop saves to `VAULT_STORE.save` after #2 merges. Details in §7.
 
 ## 0. Vision and mandate
 
@@ -112,6 +117,10 @@ merge is `e53dde9`.
 **Privacy:**
 - `8e3ff26` System info screen: public IP looked up only after an explicit yes; local IP from the interface table, no request. `tests/test_system_info_network.py`.
 
+**Imports:**
+- `f40f529` `main/IMPORT_FILES.py`: every export file is size-, type- and field-checked before import; exact duplicates (of the vault or within the file) are skipped, nothing is overwritten; same site and login with a new password is added alongside and reported; preview text shown with control characters escaped. Fixed: importing notes while the vault wasn't loaded replaced the vault; timeout at "display passwords?" looped forever; missing sections and decrypt failures crashed. `tests/test_import_hardening.py` (seeded fuzz with a control round).
+- `13219f7` Review follow-ups: `saveDatabase` writes `Bunker.mmf` atomically (`write_private_bytes`); favourite-only differences reported; invisible format characters escaped; tests fail on any unexpected exception inside an import.
+
 **Docs:**
 - `d72e0e4` `docs/THREAT_MODEL.md`.
 - `df1e805` `docs/RECOVERY.md`.
@@ -135,6 +144,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 ```
 
 - **`hardening/v2.0` @ `8e3ff26`:** 80 tests pass locally (Python 3.13).
+  - Local branch `claude/project-thread-evt0n6` (off `hardening/v2.0`, includes the two unpushed commits) adds the import work: 111 tests pass locally (Python 3.13). Reviewed by an independent agent (Opus, high effort); its findings are fixed in `13219f7`. Not pushed; waits on the maintainer's push OK.
   - CI at `1bf3591` is green on all 12 jobs (Linux, macOS, Windows × Python 3.10–3.13) plus the dependency audit. Re-check after the next push.
 - **`mobile/shared-vault` @ `e53dde9`:** 124 tests pass locally.
   - The last confirmed CI result was before the Windows fix `a696718`. Re-check the PR.
@@ -172,6 +182,9 @@ python3 BUNKER.py   # interactive; needs a real terminal
   text with different trailing whitespace would also be cleared. Low impact.
 - **No hard limit on guessing.** Deleting `config.cfg` resets the attempt counter (documented). Offline guessing against copied files is limited only by the KDF.
 - **Python can't wipe memory;** secrets may linger until the process exits.
+- **Stored text is printed raw outside the import preview.** A title or domain holding escape sequences (typed, pasted or imported) still reaches the terminal on the view and list screens. `IMPORT_FILES.printable` is the helper to reuse.
+- **Duplicate check is exact.** Entries are compared on every decrypted field; tag order and the favourite flag are ignored. A note that differs by one character is imported as new. Exports carry no timestamps, so a changed password can't be told apart from an older one.
+- **Merging into `mobile/shared-vault` will conflict** at the old `importProfiles` write and at `saveDatabase`'s write (#2 uses `write_bytes_atomic`, this branch `write_private_bytes`; both are atomic). Keep the new `importProfiles`; either writer is fine in `saveDatabase`. The other desktop save sites on this branch still write in place until #2 lands.
 - **Coverage gaps:** the interactive menus beyond add, view, copy, export and import are not covered by automated tests. Mobile was never walked by hand on a phone or in Termux.
 - **Partial migration:** desktop save sites still encrypt locally and then call the atomic writer. Moving them to `VAULT_STORE.save` is unfinished cleanup (in #2).
 
@@ -187,12 +200,14 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 ## 7. Next, ranked (each with its first step)
 
-1. **Keep CI green on both PRs** after each push, and merge `hardening/v2.0` into `mobile/shared-vault` after `8e3ff26` lands.
-2. **Fuzz the import parser** (`importNotes`, `importProfiles` in `main/DESKTOP.py`). First step: copy the responder pattern from `tests/test_backup_roundtrip.py`, feed mutated export files (reuse `mutate` from `tests/test_fuzz_vault_input.py`), and assert that the vault is unchanged or the import rejects cleanly.
-3. **Avoid duplicate entries on re-import.** Importing the same file twice currently adds every entry again. First step: write a test importing one export twice, then decide whether to skip or confirm.
-4. **Move desktop saves to `VAULT_STORE.save`** (after #2 merges). First step: `grep -n "write_bytes_atomic(\"Bunker.mmf\"" main/DESKTOP.py` and replace one site at a time, running `tests/test_desktop_flows.py`.
-5. **Walk mobile by hand** in Termux or a narrow terminal. First step: `stty cols 60; python3 BUNKER.py`, choose mobile, and run setup, then add, view, copy and change password.
-6. **Accessibility follow-ups.** Make the desktop attempt display use `max_attempts` (it hardcodes "of 3"), and review the prompts with `NO_COLOR=1 BUNKER_NO_EMOJI=1`. First step: grep `"Attempt 1 of 3"` in `main/DESKTOP.py`.
+1. **Keep CI green on both PRs** after each push, and merge `hardening/v2.0` into `mobile/shared-vault` once the waiting commits land (keep the new `importProfiles` on the conflict).
+2. **Escape control characters on every screen that shows stored text.** First step: `grep -n "Domain: \|Title: \|Tags: " main/DESKTOP.py main/MOBILE.py`, wrap each value in `printable()` from `main/IMPORT_FILES.py`, and add a test that stores `"\x1b]52;c;..."` and views it.
+3. **Move desktop saves to `VAULT_STORE.save`** (after #2 merges). First step: `grep -n "write_bytes_atomic(\"Bunker.mmf\"" main/DESKTOP.py` and replace one site at a time, running `tests/test_desktop_flows.py`.
+4. **Walk mobile by hand** in Termux or a narrow terminal. First step: `stty cols 60; python3 BUNKER.py`, choose mobile, and run setup, then add, view, copy and change password.
+5. **Accessibility follow-ups.** Make the desktop attempt display use `max_attempts` (it hardcodes "of 3"), and review the prompts with `NO_COLOR=1 BUNKER_NO_EMOJI=1`. First step: grep `"Attempt 1 of 3"` in `main/DESKTOP.py`.
+6. **Optional: import merge choices.** If users ask, offer "replace the old profile" for same-login entries. First step: a test for the prompt in `tests/test_import_hardening.py`; never default to replacing.
+
+Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`).
 
 ## 8. Gotchas
 

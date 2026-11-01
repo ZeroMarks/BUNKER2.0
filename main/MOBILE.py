@@ -264,8 +264,11 @@ def main(device_type='mobile'):
                 vault_ui.ui.menu_item('0', 'Back')
                 security_choice = vault_ui.ui.input_prompt("Select option")
                 if security_choice == '1':
-                    vault_ui.ui.success_message("Master password change not implemented yet")
-                    time.sleep(1)
+                    # Same, tested implementation as desktop: re-encrypts
+                    # every field and swaps the files together, keeping the
+                    # old ones until all writes succeed. Logs out on success.
+                    from main.INITIALIZE import changeMasterPassword, loadDatabase
+                    changeMasterPassword(vault_key, loadDatabase(vault_key))
         else:
             vault_ui.ui.error_message("Invalid option")
 

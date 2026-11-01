@@ -368,6 +368,27 @@ class Login(MobileCase):
         titles = sorted(D.decode_and_decrypt("title", e, key) for e in notes)
         self.assertEqual(titles, ["From mobile", "t"])
 
+    def test_change_master_password_from_mobile(self):
+        import main.INITIALIZE as I
+        import main.VAULT_FILES as VF
+        key = self.vault_with(S.derive_key)
+        self.passwords.append("correct-horse")
+        answers = ["n",            # hide password at login
+                   "4", "2", "1",  # settings > security > change password
+                   "n"]            # hide the new password while typing
+        with mock.patch("builtins.input", side_effect=answers), \
+                mock.patch.object(I, "timeout_getpass", lambda *a, **k: "brand new passphrase"), \
+                mock.patch.object(I, "timeoutInput", lambda *a, **k: ""), \
+                mock.patch.object(I, "clear_screen", lambda: None), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                MB.main("mobile")
+        status, new_key = VF.try_password("brand new passphrase", I.vault)
+        self.assertEqual(status, "ok")
+        self.assertEqual(VF.try_password("correct-horse", I.vault)[0], "wrong")
+        notes = [e for e in S.load(new_key).values() if S.is_note(e)]
+        self.assertEqual([S.read_note(e, new_key)["content"] for e in notes], ["c"])
+
 
 if __name__ == "__main__":
     unittest.main()

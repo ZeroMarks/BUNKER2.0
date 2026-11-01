@@ -1246,7 +1246,7 @@ def main_pwd_manager(hashed_pass, contents):
 def addProfile(hashed_pass, db):
     """Add a new profile with enhanced security and robust input validation"""
     try:
-        current_timeout = vault.manage_config(hashed_pass)["timeout_value"]
+        current_timeout = load_ui_config().get("current_timeout", 60)
         while True:
             clear_screen()
             displayHeader(f"{CYAN}✏️  ADD A PROFILE{RESET}")
@@ -1576,7 +1576,7 @@ def editProfileData(hashed_pass, db):
     """Edit profile data with enhanced security"""
     try:
         # Define current_timeout here to avoid undefined variable errors.
-        current_timeout = vault.manage_config(hashed_pass)["timeout_value"]
+        current_timeout = load_ui_config().get("current_timeout", 60)
         
         while True:
             clear_screen()
@@ -4233,7 +4233,7 @@ def exportProfiles(hashed_pass, db):
         if export_encrypted:
             #temp
             timeout = vault.manage_config(hashed_pass).get("timeout_value", 60)
-            #timeout = vault.manage_config(hashed_pass)["timeout_value"]  # Get the timeout value
+            #timeout = load_ui_config().get("current_timeout", 60)  # Get the timeout value
             while True:
                 show_password = timeoutInput(
                     f"{GOLD}Do you want to see the password as you type? (y/n) (type (.c) to cancel): {RESET}"

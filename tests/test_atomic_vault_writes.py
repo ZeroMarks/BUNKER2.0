@@ -70,7 +70,8 @@ class FailureLeavesOldVault(unittest.TestCase):
     def test_saveDatabase_success_is_0600_and_decryptable(self):
         db = {"a": {"b": "c" * 200}}
         self.assertTrue(self._quiet(I.saveDatabase, db, self.key))
-        self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
+        if os.name != "nt":  # POSIX permissions only
+            self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
         self.assertEqual(I.loadDatabase(self.key), db)
 
     def test_overwrite_db_failure_during_write(self):
@@ -84,7 +85,8 @@ class FailureLeavesOldVault(unittest.TestCase):
     def test_overwrite_db_success_writes_exact_bytes(self):
         self.assertTrue(self._quiet(I.overwrite_db, b"new-bytes"))
         self.assertEqual(Path("Bunker.mmf").read_bytes(), b"new-bytes")
-        self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
+        if os.name != "nt":  # POSIX permissions only
+            self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
 
 
 if __name__ == "__main__":

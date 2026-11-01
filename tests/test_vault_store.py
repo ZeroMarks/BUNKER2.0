@@ -107,14 +107,16 @@ class SaveBehaviour(StoreCase):
     def test_save_is_owner_only_and_leaves_no_temp_files(self):
         S.save({S.new_id(): S.make_note("t", "c", self.key)}, self.key)
         mode = stat.S_IMODE(os.stat("Bunker.mmf").st_mode)
-        self.assertEqual(mode, 0o600)
+        if os.name != "nt":  # POSIX permissions only
+            self.assertEqual(mode, 0o600)
         self.assertEqual(os.listdir("."), ["Bunker.mmf"])
 
     def test_resave_over_existing_file_stays_0600(self):
         Path("Bunker.mmf").write_bytes(b"old")
         os.chmod("Bunker.mmf", 0o644)
         S.save({}, self.key)
-        self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
+        if os.name != "nt":  # POSIX permissions only
+            self.assertEqual(stat.S_IMODE(os.stat("Bunker.mmf").st_mode), 0o600)
 
     def test_failure_before_replace_keeps_previous_file_identical(self):
         S.save({S.new_id(): S.make_note("t", "c", self.key)}, self.key)

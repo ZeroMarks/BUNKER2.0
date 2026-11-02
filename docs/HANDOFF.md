@@ -1,12 +1,12 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-10-31 (PT), import work 2026-10-31 night (PT).
+you should not need anything else to start. Last updated 2026-11-01 evening (PT): review fixes (§11).
 
-**Next three moves:** (1) keep CI green on both PRs once the waiting
-commits are pushed; (2) escape terminal control characters on every
-screen that shows stored text, not just the import preview; (3) move
-desktop saves to `VAULT_STORE.save` after #2 merges. Details in §7.
+**Next three moves:** (1) once the waiting commits are pushed, keep CI
+green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
+(conflicts listed in §5); (2) ask for a re-check of the review fixes in
+§11; (3) work the before-tag list at the top of §7.
 
 ## 0. Vision and mandate
 
@@ -121,6 +121,12 @@ merge is `e53dde9`.
 - `f40f529` `main/IMPORT_FILES.py`: every export file is size-, type- and field-checked before import; exact duplicates (of the vault or within the file) are skipped, nothing is overwritten; same site and login with a new password is added alongside and reported; preview text shown with control characters escaped. Fixed: importing notes while the vault wasn't loaded replaced the vault; timeout at "display passwords?" looped forever; missing sections and decrypt failures crashed. `tests/test_import_hardening.py` (seeded fuzz with a control round).
 - `13219f7` Review follow-ups: `saveDatabase` writes `Bunker.mmf` atomically (`write_private_bytes`); favourite-only differences reported; invisible format characters escaped; tests fail on any unexpected exception inside an import.
 
+**Review fixes (2026-11-01, unpushed; see §11):**
+- `8f030f7` Every `Bunker.mmf` save is atomic (`write_private_bytes`), desktop and INITIALIZE.
+- `2345aaa` An interrupted master password change can never self-destruct (`bunker.chk` "changing" state, `integrity_status() == "interrupted"`, `self_destruct` re-checks); shared attempt notice with a typed `LAST` confirmation before the destroying attempt; mobile allows one try per start at the limit.
+- `bac9160` Auto-logout off (0) no longer exits before the user can type.
+- `2e898b5` `config.example` documents the untracked `config.cfg`.
+
 **Docs:**
 - `d72e0e4` `docs/THREAT_MODEL.md`.
 - `df1e805` `docs/RECOVERY.md`.
@@ -143,8 +149,7 @@ python3 -m unittest discover -s tests -t .
 python3 BUNKER.py   # interactive; needs a real terminal
 ```
 
-- **`hardening/v2.0` @ `8e3ff26`:** 80 tests pass locally (Python 3.13).
-  - Local branch `claude/project-thread-evt0n6` (off `hardening/v2.0`, includes the two unpushed commits) adds the import work: 111 tests pass locally (Python 3.13). Reviewed by an independent agent (Opus, high effort); its findings are fixed in `13219f7`. Not pushed; waits on the maintainer's push OK.
+- **`hardening/v2.0` @ `1bf3591`** on GitHub. The commits after it on the local branch are unpushed (the maintainer's push OK is needed): System info IP consent, import hardening, the release-readiness walk (`config.cfg` untracked, recovery docs, release checklist) and the four review fixes. Local branch `claude/project-thread-oyvq2a`; **142 tests pass on Python 3.10 and 3.13** (2026-11-01 PT).
   - CI at `1bf3591` is green on all 12 jobs (Linux, macOS, Windows × Python 3.10–3.13) plus the dependency audit. Re-check after the next push.
 - **`mobile/shared-vault` @ `e53dde9`:** 124 tests pass locally.
   - The last confirmed CI result was before the Windows fix `a696718`. Re-check the PR.
@@ -169,7 +174,11 @@ python3 BUNKER.py   # interactive; needs a real terminal
 - **One exit path for secrets.** All display, copy and error text goes
   through `SECURE_IO`. Nothing is hidden from the scanner; the intended sink
   is left visible and triaged.
-- **Atomic, owner-only writes** (temp file with mode 0600, fsync, `os.replace`) for the salt, config, settings, key files, exports and, in #2, the vault. Multi-file changes such as a password change keep `*.prev` copies until every write has succeeded.
+- **Atomic, owner-only writes** (temp file with mode 0600, fsync, `os.replace`) for the vault, salt, config, settings, key files and exports. `tests/test_atomic_vault_writes.py` fails if anything opens `Bunker.mmf` for writing directly.
+- **Interrupted password change.** `replace_vault` keeps `*.prev` copies and marks `bunker.chk` as `"changing"` before its first write. While either is present, `integrity_status()` is `"interrupted"`: no attempt is counted (the user may be trying the other password), nothing is destroyed, and `self_destruct()` refuses on its own check too. A password that opens both `bunker.cfg` and `Bunker.mmf` finishes the change (`finish_interrupted_change`). No automatic restore from `.prev`: the user follows `docs/RECOVERY.md`, which keeps the code path small. `tests/test_interrupted_password_change.py` kills a real change after each of its 12 steps.
+- **Last attempt.** Both interfaces print `VAULT_FILES.attempts_notice` before every password prompt (`Failed attempts: N of MAX`, using the configured limit). On the desktop, when the next wrong password would destroy the vault, the user must type `LAST`; Enter exits without using it. Mobile never destroys and always allows one try per start, so the right password works at the limit; wrong ones still count.
+- **Auto-logout 0 means off** in every prompt helper.
+- **`config.cfg` untracked** (maintainer ruling, 2026-11-01): it is tied to the machine and salt. `config.example` documents its keys and defaults; `tests/test_config_example.py` keeps the two in step.
 - **KDF unchanged** (Argon2id 100 MiB, t=3, p=8, then PBKDF2): it is above both the OWASP minimum and Bitwarden's default.
 - **Clipboard default kept at 30 s,** as documented, and configurable from 5 to 300 s.
 - **History never rewritten;** histories are joined with merges.
@@ -184,7 +193,8 @@ python3 BUNKER.py   # interactive; needs a real terminal
 - **Python can't wipe memory;** secrets may linger until the process exits.
 - **Stored text is printed raw outside the import preview.** A title or domain holding escape sequences (typed, pasted or imported) still reaches the terminal on the view and list screens. `IMPORT_FILES.printable` is the helper to reuse.
 - **Duplicate check is exact.** Entries are compared on every decrypted field; tag order and the favourite flag are ignored. A note that differs by one character is imported as new. Exports carry no timestamps, so a changed password can't be told apart from an older one.
-- **Merging into `mobile/shared-vault` will conflict** at the old `importProfiles` write and at `saveDatabase`'s write (#2 uses `write_bytes_atomic`, this branch `write_private_bytes`; both are atomic). Keep the new `importProfiles`; either writer is fine in `saveDatabase`. The other desktop save sites on this branch still write in place until #2 lands.
+- **Merging into `mobile/shared-vault` will conflict** at every desktop and INITIALIZE `Bunker.mmf` save (#2 uses `VAULT_STORE.write_bytes_atomic`, this branch `write_private_bytes`; both are atomic and #2's wraps the same writer), at the old `importProfiles` write, and in the login blocks of `DESKTOP.main` and `MOBILE.main`. Keep the new `importProfiles` and this branch's login code (interrupted state, attempt notice, `LAST` confirmation); either writer is fine at the save sites. Run `tests/test_atomic_vault_writes.py` after: its source scan reads every file in `main/`.
+- **Partly restored folders.** `bunker.chk` does not cover `Bunker.mmf`. An older salt + config + record restored next to a newer database still looks consistent, and three confirmed wrong passwords destroy it (`docs/THREAT_MODEL.md` §6.10). The fix is a generation id shared by the record and a `Bunker.mmf` header: a format change, so it is planned, not done.
 - **Coverage gaps:** the interactive menus beyond add, view, copy, export and import are not covered by automated tests. Mobile was never walked by hand on a phone or in Termux.
 - **Partial migration:** desktop save sites still encrypt locally and then call the atomic writer. Moving them to `VAULT_STORE.save` is unfinished cleanup (in #2).
 
@@ -192,7 +202,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 1. Dismiss the 9 CodeQL alerts as triaged (§3), and turn on private vulnerability reporting.
 2. Keep plain-text export? It's documented and written with 0600 permissions.
-3. Should `config.cfg` stay tracked in the repo?
+3. ~~Should `config.cfg` stay tracked?~~ Decided 2026-11-01: untracked, documented by `config.example`.
 4. Add a real pepper? `BUNKER_PEPPER` is defined but unused, and adding one would make existing vaults unreadable.
 5. Where should the README live? `Read Me/README.md` isn't shown on the repo page, and `main/README.md` duplicates it. A README redesign draft exists outside the repo and has not been committed.
 6. Review and merge #1, then #2. Then tag v2.0 and publish the release.
@@ -200,14 +210,27 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 ## 7. Next, ranked (each with its first step)
 
+**Before tagging v2.0** (from the independent review of #1; each is hours, not days):
+- Restore a root `README.md` and `LICENSE.txt`: the diff moves them, so the repo page would show neither. First step: decide with the maintainer which README goes at the root (§6.5).
+- Turning the IP display off must stop the background lookup thread (it keeps running and the message says "disabled"). First step: a `threading.Event` stop flag in the IP thread, plus a test that no lookup happens after disabling.
+- Refuse pyperclip's Klipper backend, which passes the copied text on a command line. First step: check `pyperclip` backend selection in `SECURE_IO` and refuse `klipper`.
+- `reveal_secret` must bypass the `BUNKER_NO_EMOJI` filter (revealed passwords lose characters today). First step: a test revealing a password with an emoji under `BUNKER_NO_EMOJI=1`.
+- `docs/THREAT_MODEL.md` A3: most post-login prompts use a fixed 60 s auto-logout, not the configured value; say so (or pass the setting through).
+- `SECURITY.md` (prepared on `community/issue-templates`), private vulnerability reporting, SHA-256 checksums and a signed tag (`docs/RELEASE_CHECKLIST.md`).
+- Maintainer-only check of the demo data in early history (details kept privately).
+
+**Then:**
+
 1. **Keep CI green on both PRs** after each push, and merge `hardening/v2.0` into `mobile/shared-vault` once the waiting commits land (keep the new `importProfiles` on the conflict).
 2. **Escape control characters on every screen that shows stored text.** First step: `grep -n "Domain: \|Title: \|Tags: " main/DESKTOP.py main/MOBILE.py`, wrap each value in `printable()` from `main/IMPORT_FILES.py`, and add a test that stores `"\x1b]52;c;..."` and views it.
 3. **Move desktop saves to `VAULT_STORE.save`** (after #2 merges). First step: `grep -n "write_bytes_atomic(\"Bunker.mmf\"" main/DESKTOP.py` and replace one site at a time, running `tests/test_desktop_flows.py`.
 4. **Walk mobile by hand** in Termux or a narrow terminal. First step: `stty cols 60; python3 BUNKER.py`, choose mobile, and run setup, then add, view, copy and change password.
-5. **Accessibility follow-ups.** Make the desktop attempt display use `max_attempts` (it hardcodes "of 3"), and review the prompts with `NO_COLOR=1 BUNKER_NO_EMOJI=1`. First step: grep `"Attempt 1 of 3"` in `main/DESKTOP.py`.
+5. **Accessibility follow-ups.** Review the prompts with `NO_COLOR=1 BUNKER_NO_EMOJI=1` (the attempt display now uses `max_attempts`). First step: run setup and a wrong-password login with both set.
 6. **Optional: import merge choices.** If users ask, offer "replace the old profile" for same-login entries. First step: a test for the prompt in `tests/test_import_hardening.py`; never default to replacing.
 
-Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`).
+7. **Later (low impact):** the timeout message claims "All submitted data has been securely saved" (`INITIALIZE.timeoutCleanup`; nothing is saved, so drop the sentence); plain-text export needs a warning step; the encrypted export format has no version field and reuses one key for two algorithms; `max_attempts` is read from the editable `config.cfg`; a stale setup marker could let setup overwrite a real vault's salt; no directory fsync after rename; login derives the key twice; `self_destruct` still globs `*.bak.*`.
+
+Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`); the four review must-fix items (§11).
 
 ## 8. Gotchas
 
@@ -266,3 +289,25 @@ Open gaps (not fixed, in rough order):
 5. Deleting profiles has no confirmation after choosing "delete all".
 6. Changing the master password does not ask for the current one while
    logged in (design choice to confirm).
+
+## 11. Review fixes (2026-11-01 evening, Pacific time)
+
+An independent review of #1 at `1bf3591` asked for four fixes before
+merge. All four are local commits on top of the earlier unpushed work
+(§3), with tests; 142 tests pass on Python 3.10 and 3.13.
+
+| Fix | Commit | Tests |
+|---|---|---|
+| A master password change killed after the database swap left files that checked as intact; three tries of the new password then self-destructed, `.prev` copies included. Now an unfinished change is "interrupted": nothing counted or destroyed, `self_destruct` refuses, RECOVERY.md has the steps. | `2345aaa` | `test_interrupted_password_change.py` (child process killed after each of 12 steps; real crypto) |
+| Desktop and INITIALIZE `Bunker.mmf` saves truncated before writing (disk full left a 0-byte vault). | `8f030f7` | `test_atomic_vault_writes.py` (source scan, disk-full runs) |
+| No warning before the destroying attempt; mobile failures made one desktop typo destructive; mobile refused the right password at the limit. | `2345aaa` | `test_login_attempts.py` |
+| Auto-logout "off" (0) exited before the user could type. | `bac9160` | `test_autologout_off.py` |
+
+The reviewer's own reproduction scripts were re-run against these commits:
+the crash case no longer destroys, and the timeout-0 case waits for input.
+Design choices made here (maintainer may revisit): wrong passwords are not
+counted while a change is interrupted; the destroying attempt needs a typed
+`LAST`; mobile allows one try per start at the limit.
+
+Not done: pushing (waits on the maintainer), the re-check by the reviewer,
+and the before-tag list in §7.

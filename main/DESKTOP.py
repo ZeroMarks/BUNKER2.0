@@ -4,7 +4,8 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
 from cryptography.exceptions import InvalidTag
-from main.VAULT_FILES import integrity_status, record_integrity
+from main.VAULT_FILES import (integrity_status, record_integrity, attempts_notice,
+    finish_interrupted_change)
 from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_export,
     unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
     existing_profiles, plan_notes, plan_profiles, has_controls, printable)
@@ -122,23 +123,6 @@ def main(device_type='desktop'):
         print(f"{CYAN}BUNKER ACCESS{RESET}")
         print(divider)
         
-        if attempts < 3:
-            if attempts == 0:
-                print(PURPLE + "Attempt 0 of 3" + RESET)
-            elif attempts == 1:
-                print(PURPLE + "Attempt 1 of 3" + RESET)
-            elif attempts == 2:
-                print(
-                    PURPLE
-                    + f"Attempt 2 of 3 {RED}"
-                    + RESET
-                )
-            elif attempts == 3:
-                print(
-                    PURPLE
-                    + f"Attempt 3 of 3 {RED} ** ALERT: Self-destructing after this attempt... **"
-                    + RESET
-                )
         print(f"{GOLD}Security clearance required! {RESET}")
 
         # Can a failed password even be told apart from damaged files?
@@ -155,6 +139,26 @@ def main(device_type='desktop'):
         timedOut = False
 
         while not hashed_pass:
+            # Shown before every password prompt, so the attempt that would
+            # destroy the vault is always announced before it is typed.
+            notice_colours = {"info": PURPLE, "warn": GOLD, "alert": RED}
+            notice = attempts_notice(attempts, max_attempts, files_state, destroys=True)
+            for kind, text in notice:
+                print(f"{notice_colours[kind]}{text}{RESET}")
+            if any(kind == "alert" for kind, _ in notice):
+                # The next wrong password destroys the vault. Ask once, in
+                # words, so a reflexive "n" + Enter cannot spend it.
+                confirm = input(
+                    f"{RED}Type LAST to make this final attempt, or press Enter to exit: {RESET}"
+                ).strip()
+                if confirm == timeoutGlobalCode:
+                    timeoutCleanup()
+                    timedOut = True
+                    break
+                if confirm.lower() != "last":
+                    clear_screen()
+                    print(f"{GREEN}Exiting. No attempt was used.{RESET}")
+                    sys.exit()
             user_cmd = input(
                 f"{GOLD}Do you want to show your password? (y/n) or exit(e): {RESET}"
             ).lower()
@@ -229,7 +233,13 @@ def main(device_type='desktop'):
                               "No login attempt was counted")
                     
             except InvalidTag:
-                # Wrong key: the only failure that counts as a failed attempt.
+                # Wrong key: the only failure that counts as a failed attempt,
+                # except during an interrupted password change, when the user
+                # may be trying the other of their two passwords.
+                if files_state == "interrupted":
+                    print(f"{RED} ** ALERT: That password does not open these files. "
+                          f"Not counted. **{RESET}")
+                    continue
                 print(f"{RED} ** ALERT: Incorrect access password. Try again. **{RESET}")
             except Exception as e:
                 # Any other error (unreadable config, bad data) is not a failed
@@ -260,15 +270,6 @@ def main(device_type='desktop'):
                 #temporarily store ui_config to update attempts
                 ui_config["attempts"] = attempts
                 save_ui_config(ui_config)
-                # Display attempt counter
-                if attempts == 1:
-                    print(PURPLE + "Attempt 1 of 3" + RESET)
-                elif attempts == 2:
-                    print(PURPLE + "Attempt 2 of 3" + RESET)
-                elif attempts == 3:
-                    print(
-                        PURPLE + f"Attempt 3 of 3 {RED} ** ALERT: Self-destructing after this attempt... **" + RESET
-                    )
                 
                 # Save updated attempts to config if we have it
                 #if config:
@@ -307,7 +308,16 @@ def main(device_type='desktop'):
             try:
                 dataBase = loadDatabase(hashed_pass)
             except Exception as e:
+                if files_state == "interrupted":
+                    safe_exit("A master password change did not finish, and this password "
+                              "opens only part of the vault. Nothing was deleted. Put the "
+                              "*.prev files back (see docs/RECOVERY.md) and log in with your "
+                              f"old password ({safe_error(e)})")
                 safe_exit(f"Failed to open the vault after login ({safe_error(e)})")
+            if files_state == "interrupted":
+                # This key opens both bunker.cfg and Bunker.mmf: the current
+                # files are a complete set. Record them, drop the copies.
+                finish_interrupted_change()
 
             # Clean up sensitive data
             if 'entered_pass' in locals():

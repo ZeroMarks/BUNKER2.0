@@ -41,13 +41,13 @@ concern for AES-GCM.
 | # | Adversary | In scope? | What protects you |
 |---|---|---|---|
 | A1 | Someone who **copies your vault files** (stolen laptop, backup, cloud folder) | Yes | Encryption + Argon2id. They can guess passwords **offline at their own speed**; the failed-login limit does not apply to a copy. **Your master password's strength is the real defence.** |
-| A2 | Someone **at your keyboard** while BUNKER is locked | Partly | Master password. After 3 wrong passwords (counted the same way in the desktop and mobile interfaces) the vault is overwritten and deleted. Someone who can also change files in the BUNKER folder can reset the counter by deleting `config.cfg` (see §6). |
+| A2 | Someone **at your keyboard** while BUNKER is locked | Partly | Master password. After 3 wrong passwords (counted the same way in the desktop and mobile interfaces) the desktop interface overwrites and deletes the vault; the last attempt is announced first and must be confirmed by typing `LAST`. Someone who can also change files in the BUNKER folder can reset the counter by deleting `config.cfg` (see §6). |
 | A3 | Someone at your keyboard **after you walk away unlocked** | Partly | Auto-logout (10–3600 s, or off). Passwords and notes are shown only when you ask; copied secrets leave the clipboard after 30 s and when BUNKER exits or the terminal closes. |
 | A4 | Other **apps reading the clipboard** | Partly | Clipboard clearing (above). Clipboard managers and history tools can still keep a copy; see §6. |
 | A5 | Other **local user accounts** on the same machine | Yes | Vault, salt, settings and export files are written owner-only (0600) on macOS/Linux. |
 | A6 | **Shoulder surfing / screen recording** | Partly | Password input is hidden unless you choose to show it; secrets are revealed only on request. The password-strength checker shows what you type. |
 | A7 | **Malware running as you**, or root/admin | No | It can read memory, log keystrokes and read your files. No local password manager can defend against this. |
-| A8 | **Crashes, power loss, damaged files, bugs** | Yes | Salt, config, settings, key and export files are written atomically (the vault database itself in a follow-up change). `bunker.chk` records hashes of the salt and config, so damaged or mismatched files are reported instead of being counted as wrong passwords. Errors, Ctrl+C, EOF and timeouts never delete the vault; only 3 wrong passwords on verified files do. Real-crypto tests cover these cases. |
+| A8 | **Crashes, power loss, damaged files, bugs** | Yes | The vault database, salt, config, settings, key and export files are all written atomically (temp file, fsync, rename). `bunker.chk` records hashes of the salt and config, so damaged or mismatched files are reported instead of being counted as wrong passwords. A master password change marks `bunker.chk` as "changing" before its first write and keeps `.prev` copies; while either is present, wrong passwords are not counted and self-destruct refuses to run. Errors, Ctrl+C, EOF and timeouts never delete the vault; only 3 wrong passwords on verified files do. Real-crypto tests cover these cases, including a process killed after each step of a password change. Not covered: a sync or backup tool that restores an older `bunker.salt` + `bunker.cfg` + `bunker.chk` set next to a newer `Bunker.mmf` (see §6). |
 
 ## 5. Design rules the code enforces
 
@@ -113,6 +113,14 @@ concern for AES-GCM.
    files, but on SSDs and copy-on-write file systems (APFS, Btrfs, ZFS) old
    blocks may survive, and backups made by other tools are out of reach.
    Treat the vault as gone for BUNKER, not as forensically erased.
+10. **Partly restored folders.** `bunker.chk` covers the salt and config,
+   not `Bunker.mmf`. If a sync or backup tool puts back an older salt,
+   config and `bunker.chk` together but keeps a newer `Bunker.mmf` written
+   after a password change, the files look consistent, the current
+   password is reported as wrong, and three wrong passwords on the desktop
+   destroy the vault (after the "LAST ATTEMPT" warning and typed
+   confirmation). Restore all four files from the same moment. Binding the
+   database to the record is planned for a later format version.
 
 ## 7. Verifying these claims
 

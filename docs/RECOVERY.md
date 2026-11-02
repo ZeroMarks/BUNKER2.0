@@ -6,20 +6,49 @@ your files are still there. Find the message you saw below.
 Before trying anything, **copy the whole BUNKER folder somewhere safe**, so
 every step below can be undone.
 
+## "A master password change did not finish"
+
+BUNKER was closed (terminal closed, shutdown, power cut) while it was
+changing the master password. BUNKER saw files ending in `.prev`
+(`Bunker.mmf.prev`, `bunker.cfg.prev`, `bunker.salt.prev`) or a
+`bunker.chk` that says the change was still running.
+
+While this message is shown, **wrong passwords are not counted and nothing
+is ever deleted**, so you can safely try both passwords.
+
+1. Try your **new** password, then your **old** one. If either opens the
+   vault, BUNKER finishes the job by itself: it records the files as a
+   complete set and removes the `.prev` copies. Nothing else to do.
+2. If you see **"this password opens only part of the vault"** or neither
+   password works, the change stopped half-way. The `.prev` files are the
+   complete set from before the change. Rename each back over the file of
+   the same name (`Bunker.mmf.prev` → `Bunker.mmf`, `bunker.cfg.prev` →
+   `bunker.cfg`, `bunker.salt.prev` → `bunker.salt`) and open BUNKER with
+   your **old** password.
+3. If BUNKER then stops at "UI config file missing or corrupted", delete
+   `config.cfg` (see that section below) and try again with your old
+   password.
+
+## "Failed to open the vault after login"
+
+The password was right for `bunker.cfg`, but `Bunker.mmf` would not open
+with it, so the two files come from different moments. No login attempt
+was counted and nothing was deleted.
+
+- If `.prev` files exist, follow step 2 of the section above.
+- Otherwise restore `Bunker.mmf`, `bunker.salt`, `bunker.cfg` and
+  `bunker.chk` together, from the same backup.
+
 ## "The vault files are damaged or out of step with each other"
 
 BUNKER keeps `bunker.chk`, a record of what `bunker.salt` and `bunker.cfg`
 should look like. This message means one of them no longer matches. Common
-causes: a sync tool or backup restored only some files, a disk problem, or
-BUNKER was closed in the middle of changing the master password.
+causes: a sync tool or backup restored only some files, or a disk problem.
 
 No login attempt was counted.
 
-1. **If files ending in `.prev` exist** (`Bunker.mmf.prev`, `bunker.cfg.prev`,
-   `bunker.salt.prev`), a master password change was interrupted. They are
-   the complete previous set. Rename each back, removing `.prev`, so all
-   three come from the same moment, and open BUNKER with your **old**
-   password.
+1. **If files ending in `.prev` exist**, see "A master password change did
+   not finish" above.
 2. **If you restored from a backup**, restore `Bunker.mmf`, `bunker.salt`,
    `bunker.cfg` and `bunker.chk` together, from the same backup.
 3. **If you are sure the three main files belong together** (for example
@@ -75,11 +104,16 @@ want a new, empty vault, move the old `bunker.salt`, `bunker.cfg` and
 
 ## "Maximum attempts reached"
 
-- On a vault with a valid `bunker.chk`, three wrong master passwords
-  destroy the vault by design. Only an exported backup can bring the data
-  back (see below).
-- On a vault without a valid record, BUNKER leaves the files untouched and
-  exits.
+- On a vault with a valid `bunker.chk`, three wrong master passwords on
+  the desktop interface destroy the vault by design. Before the last one,
+  BUNKER shows "LAST ATTEMPT" and asks you to type `LAST`; pressing Enter
+  instead exits without using the attempt. Only an exported backup can
+  bring the data back after a self-destruct (see below).
+- The counter is shared by both interfaces. The mobile interface never
+  deletes the vault and always lets you try once per start, so the right
+  password still works there after failures elsewhere.
+- On a vault without a valid record, or while a password change is
+  unfinished, BUNKER leaves the files untouched and exits.
 
 ## Restoring from an export
 

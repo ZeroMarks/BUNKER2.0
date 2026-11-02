@@ -1,0 +1,28 @@
+# config.example - what BUNKER keeps in config.cfg (for reference only)
+#
+# BUNKER never reads this file, and you never need to copy it.
+#
+# config.cfg holds BUNKER's interface settings and the failed-login counter.
+# BUNKER creates it on first run, next to your vault, and writes it
+# encrypted (AES-256-GCM) with a key made from details of this machine and
+# your bunker.salt. A config.cfg from another computer or another vault
+# therefore cannot be read, which is why it is not in the repository and is
+# git-ignored. To go back to the defaults below, close BUNKER and delete
+# config.cfg; it is recreated at the next start. Your vault is unaffected.
+#
+# The contents, decrypted, with their defaults:
+#
+#   {
+#     "attempts": 0,            failed master-password attempts so far, shared
+#                               by the desktop and mobile interfaces; reset to
+#                               0 by a successful login
+#     "max_attempts": 3,        failed attempts allowed; on the desktop the
+#                               last one must be confirmed by typing LAST, and
+#                               a wrong password then destroys the vault
+#     "disable_ipv4": true,     true: the BUNKER banner does not look up and
+#                               show your public IP address
+#     "current_timeout": 60     auto-logout after this many seconds without
+#                               input (10-3600), or 0 for no auto-logout
+#   }
+#
+# Change these from inside BUNKER (Settings), not by editing config.cfg.

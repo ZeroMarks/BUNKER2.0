@@ -13,9 +13,13 @@ bunker.salt
 # Settings and integrity record BUNKER writes next to the vault. A copy committed
 # from a previous run stops a new install from starting (settings are tied to
 # the salt), so they must never be tracked.
+# (config.example, which documents config.cfg, is tracked on purpose.)
 config.cfg
 bunker.chk
 *.prev
 *.bak.*
+# Leftovers from an interrupted save or setup.
+.bunker-*.tmp
+.bunker-setup-in-progress
 # Exports and saved network reports written by the app.
 network_info_*.txt

@@ -117,6 +117,8 @@ a known limitation, it says so.
   `config.cfg` that had been committed made the mobile interface stop at
   "UI config file missing or corrupted" on a fresh download, before it could
   offer first-run setup; the file is no longer part of the repository.
+  BUNKER creates it on first run. `config.example` documents what it holds
+  and its defaults.
 
 ## Requirements
 

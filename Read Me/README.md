@@ -100,7 +100,7 @@ python3 BUNKER.py
 
 On first run BUNKER walks you through creating a new vault and master password (at least 8 characters). After that you'll reach the BUNKER ACCESS page each time you launch.
 
-**Your vault files** live in the folder you run BUNKER from: `Bunker.mmf` (encrypted vault), `bunker.salt` and `bunker.cfg`. You need all of them to open the vault. They are git-ignored so you can't commit them by accident.
+**Your vault files** live in the folder you run BUNKER from: `Bunker.mmf` (encrypted vault), `bunker.salt` and `bunker.cfg`. You need all of them to open the vault. Next to them BUNKER keeps `bunker.chk` (a record that the files belong together) and `config.cfg` (your settings and the failed-login counter, encrypted and tied to this machine and vault). BUNKER creates `config.cfg` on first run; [`config.example`](../config.example) lists what it holds and its defaults. All of these are git-ignored so you can't commit them by accident.
 
 ### Plain output (no colours)
 

@@ -157,8 +157,10 @@ class LoginFlowNeverWipesOnErrors(unittest.TestCase):
         self.assertVaultUntouched()
 
     def test_failed_login_limit_still_self_destructs(self):
-        """The one deliberate trigger: wrong master password max_attempts times."""
-        with mock.patch("builtins.input", return_value="n"), \
+        """The one deliberate trigger: wrong master password max_attempts times
+        (the last one confirmed in words, as the login now asks)."""
+        answer = lambda prompt="", *a, **k: "last" if "Type LAST" in prompt else "n"
+        with mock.patch("builtins.input", answer), \
              mock.patch.object(D, "integrity_status", return_value="ok"), \
              mock.patch.object(D, "timeout_getpass", return_value="wrong"), \
              mock.patch.object(D.vault, "decrypt_data", side_effect=InvalidTag()):

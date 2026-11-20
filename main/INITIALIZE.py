@@ -448,8 +448,7 @@ def overwrite_db(new_contents):
             new_contents = new_contents.encode()
             
         # Write new contents as binary
-        with open("Bunker.mmf", "wb") as file:
-            file.write(new_contents)
+        write_private_bytes("Bunker.mmf", new_contents)
             
         # Set proper permissions on Unix-like systems
         if os.name == 'posix':
@@ -475,8 +474,8 @@ def overwrite_db(new_contents):
                 latest_backup = max(backup_files, key=lambda x: int(x.split(".")[-1]))
                 print(f"{GOLD}Attempting to restore from backup: {latest_backup}{RESET}")
                 
-                with open(latest_backup, "rb") as src, open("Bunker.mmf", "wb") as dst:
-                    dst.write(src.read())
+                with open(latest_backup, "rb") as src:
+                    write_private_bytes("Bunker.mmf", src.read())
                     
                 print(f"{GREEN}Restored from backup{RESET}")
         except Exception as restore_error:
@@ -1196,13 +1195,10 @@ def saveDatabase(db, hashed_pass):
     try:
         db_bytes = json.dumps(db).encode('utf-8')
         encrypted_db = vault.encrypt_data(db_bytes, hashed_pass)
-        with open("Bunker.mmf", "wb") as f:
-            f.write(encrypted_db)
-        if os.name == 'posix':
-            os.chmod("Bunker.mmf", 0o600)
-        file_size = os.path.getsize("Bunker.mmf")
-        if file_size < 100 and len(db) > 0:
-            raise ValueError(f"Database file too small ({file_size} bytes)")
+        if len(encrypted_db) < 100 and len(db) > 0:
+            raise ValueError(f"Database file too small ({len(encrypted_db)} bytes)")
+        # Atomic and owner-only: a crash or failed write leaves the old vault.
+        write_private_bytes("Bunker.mmf", encrypted_db)
         # Only update config if it loads successfully
         try:
             vault.manage_config(
@@ -2087,8 +2083,7 @@ def cleanupDatabase(hashed_pass, db):
             encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
             
             # Write directly as bytes to ensure consistent format
-            with open("Bunker.mmf", "wb") as f:
-                f.write(encrypted_db)
+            write_private_bytes("Bunker.mmf", encrypted_db)
                 
             print(f"\n{GREEN}** Database cleaned up: Removed {len(invalid_entries)} invalid entries **{RESET}")
             if profile_count > 0:

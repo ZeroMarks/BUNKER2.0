@@ -486,7 +486,17 @@ def safe_exit(message, code=1):
 def self_destruct():
     """Destroy the vault. Only called when the failed-login limit is reached.
 
-    Securely deletes all sensitive files with multiple overwrite passes."""
+    Securely deletes all sensitive files with multiple overwrite passes.
+
+    Refuses, and returns False, unless the vault files are one verified,
+    consistent set at this moment (VAULT_FILES.destroy_allowed). In
+    particular it never runs while a master password change is part-way
+    through: the ``*.prev`` copies may then be the only complete vault."""
+    from main.VAULT_FILES import destroy_allowed
+    if not destroy_allowed():
+        print(f"{GOLD}Self-destruct skipped: the vault files are not one verified set "
+              f"(for example, a master password change did not finish). Nothing was deleted.{RESET}")
+        return False
     # Updated list of sensitive files
     sensitive_files = [
         "Bunker.mmf",
@@ -496,7 +506,11 @@ def self_destruct():
         "bunker.chk",
         ".vault_config",
         "*.bak.*",        # overwrite_db backups (patterns are expanded below)
-        "*.prev",         # copies kept during a master password change
+        # Copies kept during a master password change. Exact names only, so
+        # an unrelated *.prev file in the same folder is never touched.
+        "Bunker.mmf.prev",
+        "bunker.cfg.prev",
+        "bunker.salt.prev",
         ".bunker-*.tmp",  # leftovers from an interrupted atomic write
     ]
     
@@ -699,6 +713,21 @@ def get_external_ip():
         return "Unknown"
     
     
+def local_ipv4():
+    """First non-loopback IPv4 address of this machine, read from the local
+    interface table. Makes no network request and no DNS lookup."""
+    try:
+        for name, addrs in psutil.net_if_addrs().items():
+            if name.startswith("lo"):
+                continue
+            for addr in addrs:
+                if addr.family == socket.AF_INET and not addr.address.startswith("127."):
+                    return addr.address
+    except Exception:
+        pass
+    return "Unknown"
+
+
 def get_network_interfaces():
     """Get network interfaces with enhanced error handling"""
     try:

@@ -53,6 +53,41 @@ a known limitation, it says so.
 - **Secrets are shown only when you ask.** Passwords and note contents are
   printed only after you choose to view them, all through one display function.
   Nothing writes them to a log file.
+- **Generated passwords and passphrases are copied, not printed.** The
+  password generator and the encrypted export's generated passphrase used to
+  appear on screen straight away. They are now copied to the clipboard (and
+  cleared like any other copy) and shown masked; type `v` at the prompt to
+  see one on screen. If the clipboard is unavailable, BUNKER says that
+  nothing was copied before you decide, and an export passphrase is then
+  always shown, because there is no other way to give it to you.
+- **A password you view is no longer filtered.** With `BUNKER_NO_EMOJI`
+  set, emoji and symbol characters inside a viewed password or note were
+  dropped from the display. Only BUNKER's own text is filtered now. (A
+  terminal that cannot encode a character still shows `?` for it.)
+- **The KDE Klipper clipboard fallback is not used.** That tool receives the
+  copied text as a command-line argument, which other users on the same
+  computer can read. BUNKER treats it as "no clipboard"; see Known
+  limitations.
+- **The System info screen asks before going online.** It used to look up
+  your public IP from three web services every time you opened it, even if
+  you declined to see network details. It now does so only after you answer
+  yes to "Look up your public IP online?"; the local IP is read from your
+  network interfaces without any request.
+- **Imports check the file first.** Importing notes while the vault was
+  not loaded used to replace the whole vault with just the imported notes;
+  it now refuses. Every export file is checked before anything is saved:
+  damaged, oversized or wrong-format files are refused with a plain reason,
+  and entries with missing or wrong-typed fields are skipped and listed.
+  If saving fails, nothing changes. A timeout during an import now logs you
+  out instead of looping.
+- **Re-importing doesn't create duplicates.** Entries already in your vault
+  are skipped, and nothing is ever overwritten. A profile with the same site
+  and login but a different password is added next to the old one, and the
+  import tells you so.
+- **The import preview shows hidden terminal codes.** Escape sequences in
+  an export file are shown as visible codes in the import preview instead of
+  being sent to your terminal, and the import tells you which entries have
+  them. (The other screens do not escape them yet.)
 - **Error messages no longer include exception details.** Errors now name
   the type of problem (plus the system reason for file errors) and leave out
   the raw exception text, which could include decrypted data.
@@ -92,8 +127,13 @@ a known limitation, it says so.
 - **Leftover debug output removed.**
 - **Unused dependencies removed.** `keyboard` (a global keyboard hook) and
   `inputimeout` were imported but never used.
-- **Vault files are git-ignored**, so a local vault, salt or backup can't be
-  committed by accident.
+- **Vault files are git-ignored**, so a local vault, salt, backup, settings
+  file or integrity record can't be committed by accident. A copy of
+  `config.cfg` that had been committed made the mobile interface stop at
+  "UI config file missing or corrupted" on a fresh download, before it could
+  offer first-run setup; the file is no longer part of the repository.
+  BUNKER creates it on first run. `config.example` documents what it holds
+  and its defaults.
 
 ## Requirements
 
@@ -117,7 +157,9 @@ python3 -m unittest discover -s tests -t .
 
 The tests cover the first-run flow end to end with real encryption, the
 self-destruct policy, clipboard clearing (timer, outages, terminal close),
-safe error text, atomic and owner-only file writes, plain output, and a
+generated secrets being copied instead of printed,
+safe error text, atomic and owner-only file writes, plain output, that the
+System info screen stays offline unless you ask for your public IP, and a
 fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
 with Python 3.10-3.13, plus a dependency audit. Most interactive menus are
 not covered by automated tests.
@@ -145,6 +187,18 @@ protection stops.
 - **Killing BUNKER with `kill -9`** (or a crash of Python itself) skips all
   cleanup, so a password copied less than 30 seconds earlier stays on the
   clipboard.
+- **Copying to the clipboard on Linux needs a clipboard tool.** Install
+  `xclip`, `xsel` or `wl-clipboard` (Wayland). Without one, BUNKER says
+  "Could not access the clipboard" and nothing is copied or shown; you can
+  still view a password on screen when you choose to.
+  On KDE, the built-in Klipper fallback is refused on purpose, so install
+  one of those tools there too.
+- **A generated export passphrase is on the clipboard for 30 seconds.**
+  Paste it somewhere safe, or type `v` to see it, before you move on. If you
+  lose it, that export cannot be opened; export again to get a new one.
+- **Terminal width decides the suggested interface.** BUNKER guesses
+  mobile for terminals up to 80 columns and tablet up to 120, and asks you
+  to confirm. Answer **n** and choose Desktop/Laptop if the guess is wrong.
 - **Security reports:** email support@zeromarks.net instead of opening a
   public issue.
 - BUNKER is provided as-is, for educational purposes, with no warranty.

@@ -120,7 +120,7 @@ class DamagedFilesNeverCountAsWrongPassword(VaultTestCase):
 
     def test_three_wrong_passwords_on_intact_files_still_self_destruct(self):
         destroyed, menu = desktop_login(["wrong one!", "wrong two!", "wrong three"],
-                                        prompts=["n", "n", "n"])
+                                        prompts=["n", "n", "last", "n"])
         self.assertTrue(destroyed)
         self.assertFalse(menu)
 

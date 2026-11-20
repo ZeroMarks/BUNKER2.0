@@ -145,36 +145,30 @@ def main(device_type='mobile'):
 
     # Handle login process (shared, persistent attempt counter)
     from main.INITIALIZE import vault as login_vault
-    from main.VAULT_FILES import try_password
+    from main.VAULT_FILES import (try_password, integrity_status, attempts_notice,
+                                  finish_interrupted_change)
     vault_ui = VaultUI(device_type)
     ui_config = load_ui_config()
     attempts = ui_config.get("attempts", 0)
     max_attempts = ui_config.get("max_attempts", 3)
     vault_key = None
 
-    while attempts < max_attempts:
+    files_state = integrity_status()
+    tried_this_launch = False
+
+    # One try per launch is always allowed, even when the shared counter is
+    # already at the limit (for example after failures on the desktop): the
+    # mobile interface never destroys, so refusing the correct password here
+    # would only lock the owner out. Wrong passwords are still counted.
+    while attempts < max_attempts or not tried_this_launch:
         clear_screen()
         title_with_label(device_type)
         print(f"{CYAN}BUNKER ACCESS{RESET}")
         print(divider_m)
-        
-        if attempts < 3:
-            if attempts == 0:
-                print(PURPLE + "Attempt 0 of 3" + RESET)
-            elif attempts == 1:
-                print(PURPLE + "Attempt 1 of 3" + RESET)
-            elif attempts == 2:
-                print(
-                    PURPLE
-                    + f"Attempt 2 of 3 {RED}"
-                    + RESET
-                )
-            elif attempts == 3:
-                print(
-                    PURPLE
-                    + f"Attempt 3 of 3 {RED} ** ALERT: Self-destructing after this attempt... **"
-                    + RESET
-                )
+
+        notice_colours = {"info": PURPLE, "warn": GOLD, "alert": RED}
+        for kind, text in attempts_notice(attempts, max_attempts, files_state, destroys=False):
+            print(f"{notice_colours[kind]}{text}{RESET}")
         print(f"{GOLD}Security clearance required! {RESET}")
 
         user_cmd = input(f"{GOLD}Do you want to show your password? (y/n) or exit(e): {RESET}").lower()
@@ -211,11 +205,16 @@ def main(device_type='mobile'):
         # wrong password counts, damaged files never do, and the counter is
         # the shared one, so switching interface does not reset it. Mobile
         # never destroys anything itself.
+        tried_this_launch = True
         try:
             status, key = try_password(master_pass, login_vault)
         except Exception as e:
             vault_ui.ui.error_message(f"Could not check the password: {safe_error(e)}")
             return
+        if status == "interrupted":
+            # A password change did not finish; never counted.
+            vault_ui.ui.error_message("That password does not open these files. Not counted.")
+            continue
         if status == "ok":
             ui_config["attempts"] = 0
             save_ui_config(ui_config)
@@ -243,8 +242,16 @@ def main(device_type='mobile'):
             login_vault.decrypt_data(encrypted_contents, vault_key).decode()
         )
     except Exception as e:
+        if files_state == "interrupted":
+            vault_ui.ui.error_message(
+                "A master password change did not finish, and this password opens only "
+                "part of the vault. Nothing was deleted. Put the *.prev files back "
+                "(see docs/RECOVERY.md) and log in with your old password.")
+            return
         vault_ui.ui.error_message(f"Could not open the vault: {safe_error(e)}")
         return
+    if files_state == "interrupted":
+        finish_interrupted_change()
 
     # Initialize the UI with detected device type
     vault_ui = VaultUI(device_type)

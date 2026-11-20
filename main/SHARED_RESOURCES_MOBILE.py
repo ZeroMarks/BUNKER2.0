@@ -601,7 +601,16 @@ def timeoutCleanup():
         os._exit(1)
 
 def timeoutInput(caption, timeout=60):
-    """Handle timeout input"""
+    """Read a line, logging out after ``timeout`` seconds of inactivity.
+
+    A timeout of None, 0 or less means auto-logout is off: wait as long as
+    the user needs. (Waiting 0 seconds used to log out before anything could
+    be typed, locking out anyone who had turned auto-logout off.)"""
+    if timeout is None or timeout <= 0:
+        try:
+            return input(caption)
+        except EOFError:
+            return None
     try:
         import threading
         def input_thread(q):
@@ -630,7 +639,13 @@ def timeoutInput(caption, timeout=60):
         return timeoutGlobalCode
 
 def timeout_getpass(prompt, timeout=60):
-    """Get password with timeout"""
+    """Read a password without echo, logging out after ``timeout`` seconds.
+    None, 0 or less means auto-logout is off (see timeoutInput)."""
+    if timeout is None or timeout <= 0:
+        try:
+            return getpass.getpass(prompt)
+        except EOFError:
+            return None
     try:
         import threading
         def getpass_thread(q):

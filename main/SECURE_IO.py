@@ -8,7 +8,9 @@ Rules this module enforces for the rest of the code base:
   and again when BUNKER exits - but only if it still holds that secret, so
   something the user copied afterwards is left alone.
 * Screen: a secret is only shown when the user explicitly asked to see it,
-  and only through ``reveal_secret``. Nothing else prints secrets.
+  and only through ``reveal_secret``. Nothing else prints secrets. A secret
+  BUNKER has just generated is handed over with ``offer_secret``: clipboard
+  first, screen only if the user types ``v``.
 * Errors: exception text can contain decrypted data (for example a
   ``UnicodeDecodeError`` quotes the bytes it failed on). Error messages shown
   to the user are built with ``safe_error``, which never includes the
@@ -57,11 +59,26 @@ def set_clipboard_backend(copy, paste):
     _backend = None if copy is None else (copy, paste)
 
 
+_system_clipboard = None  # pyperclip's (copy, paste), once it has found a tool
+
+
 def _clipboard():
+    """Return (copy, paste). Raises if the only clipboard tool is unsafe."""
+    global _system_clipboard
     if _backend is not None:
         return _backend
+    if _system_clipboard is not None:
+        return _system_clipboard
     import pyperclip
-    return pyperclip.copy, pyperclip.paste
+    copy, paste = pyperclip.determine_clipboard()
+    # pyperclip's Klipper backend passes the text as a command-line argument
+    # (qdbus ... setClipboardContents <text>), where other local users can
+    # read it from the process list. Treat it as "no clipboard" instead.
+    if "klipper" in getattr(copy, "__name__", "").lower():
+        raise RuntimeError("clipboard tool refused")
+    if callable(copy) and type(copy).__name__ != "ClipboardUnavailable":
+        _system_clipboard = (copy, paste)
+    return copy, paste
 
 
 # Random key for this process only. The fingerprint is an HMAC under it, so
@@ -179,8 +196,46 @@ def reveal_secret(label, value, out=None):
     terminal only - never to a log or a file.
     """
     stream = out if out is not None else sys.stdout
-    stream.write(f"{label}{value}\n")
+    from main import TERMINAL
+    if isinstance(stream, TERMINAL._EmojiFreeStream):
+        # BUNKER_NO_EMOJI strips pictographs from BUNKER's own text. A secret
+        # must be shown exactly as stored, so only the label is filtered.
+        stream.write(label)
+        stream._stream.write(f"{value}\n")
+    else:
+        stream.write(f"{label}{value}\n")
     stream.flush()
+
+
+SHOW_KEY = "v"
+
+
+def offer_secret(what, value, ask, timeout=CLIPBOARD_CLEAR_SECONDS, warning=""):
+    """Hand over a secret BUNKER has just generated: clipboard first, screen
+    only if the user asks.
+
+    ``what`` names it ("Generated password"). ``ask`` is the prompt function
+    (``timeoutInput``); its answer is returned so the caller can handle a
+    timeout. The secret is copied with the usual auto-clear and is printed
+    only when the user types ``v``. If the clipboard is unavailable the user
+    is told plainly that nothing was copied. ``warning`` is one extra plain
+    sentence shown before the prompt (for example what is lost without it).
+
+    All text here is plain: no colour, emoji or box drawing, so it reads the
+    same in a screen reader and with NO_COLOR.
+    """
+    if copy_secret(value, timeout):
+        print(copy_notice(what, timeout))
+        skip = "press Enter to continue without showing it"
+    else:
+        print(f"Could not access the clipboard. {what} was NOT copied.")
+        skip = "press Enter to continue without it"
+    if warning:
+        print(warning)
+    answer = ask(f"Type '{SHOW_KEY}' then Enter to show it on screen, or {skip}: ")
+    if isinstance(answer, str) and answer.strip().lower() == SHOW_KEY:
+        reveal_secret(f"{what}: ", value)
+    return answer
 
 
 def mask(value=None):

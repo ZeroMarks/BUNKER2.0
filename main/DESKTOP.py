@@ -9,7 +9,7 @@ from main.VAULT_FILES import (integrity_status, record_integrity, attempts_notic
 from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_export,
     unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
     existing_profiles, plan_notes, plan_profiles, has_controls, printable)
-from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS, write_private_bytes
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, offer_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS, write_private_bytes
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
@@ -707,8 +707,9 @@ def pwdGenerate(hashed_pass, db):
                     # Display and copy to clipboard
                     clear_screen()
                     displayHeader(f"🪄 {CYAN}GENERATE RANDOM PASSWORD{RESET}")
-                    reveal_secret("Generated Password: ", password)
-                    print(to_clipboard(password))
+                    print(f"Generated Password: {mask()}")
+                    if offer_secret("Generated password", password, timeoutInput) == timeoutGlobalCode:
+                        return True
 
                     # Ask user to continue or return
                     userContinue = timeoutInput(
@@ -3810,11 +3811,16 @@ def exportNotes(hashed_pass, db):
             print(f"{RED}╠══════════════════════════════════════════════════════╣{RESET}")
             print(f"{RED}║We have generated a passphrase:                       ║{RESET}")
             print(f"{RED}║                                                      ║{RESET}")
-            reveal_secret(f"{RED}║{CYAN}  ", f"{generated_passphrase:<52}{RED}║{RESET}")
+            print(f"{RED}║{CYAN}  {mask():<52}{RED}║{RESET}")
             print(f"{RED}║                                                      ║{RESET}")
             print(f"{RED}║ ** IMPORTANT: Store this passphrase securely! **     ║{RESET}")
             print(f"{RED}║ You will need it to decrypt and import notes.        ║{RESET}")
             print(f"{RED}╚══════════════════════════════════════════════════════╝{RESET}")
+            if offer_secret(
+                "Passphrase", generated_passphrase, timeoutInput,
+                warning="Save it in a safe place now: without it this export cannot be opened.",
+            ) == timeoutGlobalCode:
+                return True
         elif export_encrypted:
             print(f"\n{RED}╔══════════════════════════════════════════════════════╗{RESET}")
             print(f"{RED}║              SECURITY NOTICE                         ║{RESET}")
@@ -4413,11 +4419,16 @@ def exportProfiles(hashed_pass, db):
                 print(f"{RED}╠══════════════════════════════════════════════════════╣{RESET}")
                 print(f"{RED}║We have generated a passphrase:                       ║{RESET}")
                 print(f"{RED}║                                                      ║{RESET}")
-                reveal_secret(f"{RED}║{CYAN}  ", f"{generated_passphrase:<52}{RED}║{RESET}")
+                print(f"{RED}║{CYAN}  {mask():<52}{RED}║{RESET}")
                 print(f"{RED}║                                                      ║{RESET}")
                 print(f"{RED}║ ** IMPORTANT: Store this passphrase securely! **     ║{RESET}")
                 print(f"{RED}║ You will need it to decrypt and import profiles.     ║{RESET}")
                 print(f"{RED}╚══════════════════════════════════════════════════════╝{RESET}")
+                if offer_secret(
+                    "Passphrase", generated_passphrase, timeoutInput,
+                    warning="Save it in a safe place now: without it this export cannot be opened.",
+                ) == timeoutGlobalCode:
+                    return True
             elif export_encrypted:
                 print(f"\n{RED}╔══════════════════════════════════════════════════════╗{RESET}")
                 print(f"{RED}║              SECURITY NOTICE                         ║{RESET}")

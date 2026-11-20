@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§12).
+you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§13); judge pass (§12).
 
 **Next three moves:** (1) once the waiting commits are pushed, keep CI
 green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
@@ -102,7 +102,7 @@ merge is `e53dde9`.
 - `a719187`…`c2a30cd` `main/SECURE_IO.py`: `copy_secret`, `reveal_secret`, `safe_error`.
 - `2fcfa97`, `1561c40` Clipboard timer race, outage handling, symlink-safe exports.
 - `f00b095` Keyed (HMAC) clipboard fingerprint.
-- §12 (2026-11-20): `SECURE_IO.offer_secret` hands generated passwords and export passphrases to the clipboard instead of printing them; Klipper refused; revealed secrets bypass the emoji filter.
+- §13 (2026-11-20): `SECURE_IO.offer_secret` hands generated passwords and export passphrases to the clipboard instead of printing them; Klipper refused; revealed secrets bypass the emoji filter.
 
 **Platform:**
 - `540ff7b` Python 3.10/3.11 support.
@@ -207,7 +207,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 4. Add a real pepper? `BUNKER_PEPPER` is defined but unused, and adding one would make existing vaults unreadable.
 5. Where should the README live? `Read Me/README.md` isn't shown on the repo page, and `main/README.md` duplicates it. A README redesign draft exists outside the repo and has not been committed.
 6. Review and merge #1, then #2. Then tag v2.0 and publish the release.
-8. Should copy become the default at the view prompts (§12, recommendation: yes)?
+8. Should copy become the default at the view prompts (§13, recommendation: yes)?
 7. Community files (issue forms, `SUPPORT.md`, `SECURITY.md`, `CONTRIBUTING.md` under `.github/`) are prepared on local branch `community/issue-templates` (off `main`, new files only; merge after #1 so their doc links resolve). Recommendation: accept issues only, no outside code PRs while the licence forbids modification. When private vulnerability reporting is on, point `SECURITY.md` at GitHub's "Report a vulnerability" button.
 
 ## 7. Next, ranked (each with its first step)
@@ -230,7 +230,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 7. **Later (low impact):** the timeout message claims "All submitted data has been securely saved" (`INITIALIZE.timeoutCleanup`; nothing is saved, so drop the sentence); plain-text export needs a warning step; the encrypted export format has no version field and reuses one key for two algorithms; `max_attempts` is read from the editable `config.cfg`; a stale setup marker could let setup overwrite a real vault's salt; no directory fsync after rename; login derives the key twice; `self_destruct` still globs `*.bak.*`.
 
-Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`); the four review must-fix items (§11); Klipper refusal and exact reveal under `BUNKER_NO_EMOJI` (§12).
+Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`); the four review must-fix items (§11); Klipper refusal and exact reveal under `BUNKER_NO_EMOJI` (§13).
 
 ## 8. Gotchas
 
@@ -312,7 +312,23 @@ counted while a change is interrupted; the destroying attempt needs a typed
 Not done: pushing (waits on the maintainer), the re-check by the reviewer,
 and the before-tag list in §7.
 
-## 12. Generated secrets are copied, not printed (2026-11-20, Pacific time)
+## 12. Judge pass (2026-11-20, Pacific time)
+
+The 14 waiting commits apply cleanly on `hardening/v2.0` and 142 tests pass (Linux, Python 3.13). PR #2's head passes 124. No crypto defects found.
+
+**Before merging #2:**
+- Two processes saving one vault lose edits: `VAULT_STORE.modify` has no lock, and desktop saves the `db` it loaded at login. First step: a lock file around load, change and save, and a test with two interleaved `modify` calls. The note manager's "reload latest" opens `Bunker.mmf` in text mode (`DESKTOP.py`, `open("Bunker.mmf", "r")`), so it always falls back to the stale copy; change it to `"rb"`.
+- When merging, keep the interrupted-password-change handling in the mobile login (`finish_interrupted_change()` after a correct password), and keep #2's folder fsync in `SECURE_IO`.
+
+**Before tagging:**
+- `stop_ip_fetch_thread()` does not stop the thread (section 7); it also starts a second one on the next "on".
+- Windows clipboard history and cloud clipboard keep copied secrets. First step: in `SECURE_IO`, set the registered formats `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory` = 0 and `CanUploadToCloudClipboard` = 0 alongside the text (as KeePassXC does).
+
+- Setup never warns that wrong passwords destroy the vault: `vaultSetup` doesn't mention the limit, its `.g` guide says "not implemented", and `display_setup_guide()` is never called. First step: one line before the password prompt, built from `max_attempts`, with Enter to acknowledge; build the guide's "three" from `max_attempts` too.
+
+**Later:** mobile errors disappear after one second (wait for Enter instead); mobile edit or delete of an entry changed elsewhere gives a bare `KeyError` or a false "deleted"; a future format should store KDF parameters in a header and bind fields to their record with GCM associated data.
+
+## 13. Generated secrets are copied, not printed (2026-11-20, Pacific time)
 
 Branch `claude/project-thread-rbp9mm`, a draft PR into `hardening/v2.0`. It
 is built on the review-fix commits of §11, so it carries them too.
@@ -355,4 +371,3 @@ Copy first, show only on request, is the common rule.
 4. Mobile has no generator or export, so nothing changed there.
 5. Not walked by hand in a real terminal with a real clipboard tool, and
    not run on Python 3.10, macOS or Windows; CI on the PR covers those.
-

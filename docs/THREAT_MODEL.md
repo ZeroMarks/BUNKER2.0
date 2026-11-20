@@ -53,6 +53,9 @@ concern for AES-GCM.
 
 - **One exit point for secrets.** `main/SECURE_IO.py` is the only code that
   puts a secret on screen (`reveal_secret`) or the clipboard (`copy_secret`).
+  A secret BUNKER generates (a password, an export passphrase) is handed
+  over by `offer_secret`: copied with auto-clear, and shown only if you type
+  `v`.
   Errors are shown with `safe_error`, which never includes exception text.
 - **Deliberate destruction only.** `self_destruct()` has exactly one call
   site, guarded by `attempts >= max_attempts` and by the files being
@@ -97,6 +100,9 @@ concern for AES-GCM.
 4. **Clipboard history.** Clipboard managers, OS history (for example
    Windows Win+V or KDE Klipper) and remote-desktop tools may keep a copy
    after BUNKER clears the clipboard.
+   BUNKER refuses to copy through KDE's Klipper command-line fallback,
+   because it would put the secret in the process list; it cannot stop
+   Klipper from recording what another tool copies.
 5. **Forced kill.** `kill -9` or a crash of Python itself skips all cleanup,
    so a secret copied less than 30 seconds earlier stays on the clipboard.
 6. **Plain-text export** writes your data unencrypted, by design, when you
@@ -121,6 +127,10 @@ concern for AES-GCM.
    destroy the vault (after the "LAST ATTEMPT" warning and typed
    confirmation). Restore all four files from the same moment. Binding the
    database to the record is planned for a later format version.
+11. **What you view stays in the terminal.** A password or note you choose
+    to see is printed to your terminal. BUNKER clears the screen on the next
+    menu, but terminal scrollback, a screen recording, a screen share or
+    someone behind you can still capture it. Copying is the safer default.
 
 ## 7. Verifying these claims
 
@@ -128,7 +138,8 @@ concern for AES-GCM.
 python3 -m unittest discover -s tests -t .
 ```
 
-The tests cover clipboard clearing (timer, outages, races, SIGTERM), error
+The tests cover clipboard clearing (timer, outages, races, SIGTERM),
+generated secrets copied instead of printed, error
 text, export and file permissions, atomic writes, and the self-destruct
 policy (errors, EOF, Ctrl+C and timeouts keep the vault; the failed-login
 limit still destroys it).

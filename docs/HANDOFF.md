@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-01 evening (PT): review fixes (§11).
+you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§12).
 
 **Next three moves:** (1) once the waiting commits are pushed, keep CI
 green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
@@ -102,6 +102,7 @@ merge is `e53dde9`.
 - `a719187`…`c2a30cd` `main/SECURE_IO.py`: `copy_secret`, `reveal_secret`, `safe_error`.
 - `2fcfa97`, `1561c40` Clipboard timer race, outage handling, symlink-safe exports.
 - `f00b095` Keyed (HMAC) clipboard fingerprint.
+- §12 (2026-11-20): `SECURE_IO.offer_secret` hands generated passwords and export passphrases to the clipboard instead of printing them; Klipper refused; revealed secrets bypass the emoji filter.
 
 **Platform:**
 - `540ff7b` Python 3.10/3.11 support.
@@ -206,6 +207,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 4. Add a real pepper? `BUNKER_PEPPER` is defined but unused, and adding one would make existing vaults unreadable.
 5. Where should the README live? `Read Me/README.md` isn't shown on the repo page, and `main/README.md` duplicates it. A README redesign draft exists outside the repo and has not been committed.
 6. Review and merge #1, then #2. Then tag v2.0 and publish the release.
+8. Should copy become the default at the view prompts (§12, recommendation: yes)?
 7. Community files (issue forms, `SUPPORT.md`, `SECURITY.md`, `CONTRIBUTING.md` under `.github/`) are prepared on local branch `community/issue-templates` (off `main`, new files only; merge after #1 so their doc links resolve). Recommendation: accept issues only, no outside code PRs while the licence forbids modification. When private vulnerability reporting is on, point `SECURITY.md` at GitHub's "Report a vulnerability" button.
 
 ## 7. Next, ranked (each with its first step)
@@ -213,8 +215,6 @@ python3 BUNKER.py   # interactive; needs a real terminal
 **Before tagging v2.0** (from the independent review of #1; each is hours, not days):
 - Restore a root `README.md` and `LICENSE.txt`: the diff moves them, so the repo page would show neither. First step: decide with the maintainer which README goes at the root (§6.5).
 - Turning the IP display off must stop the background lookup thread (it keeps running and the message says "disabled"). First step: a `threading.Event` stop flag in the IP thread, plus a test that no lookup happens after disabling.
-- Refuse pyperclip's Klipper backend, which passes the copied text on a command line. First step: check `pyperclip` backend selection in `SECURE_IO` and refuse `klipper`.
-- `reveal_secret` must bypass the `BUNKER_NO_EMOJI` filter (revealed passwords lose characters today). First step: a test revealing a password with an emoji under `BUNKER_NO_EMOJI=1`.
 - `docs/THREAT_MODEL.md` A3: most post-login prompts use a fixed 60 s auto-logout, not the configured value; say so (or pass the setting through).
 - `SECURITY.md` (prepared on `community/issue-templates`), private vulnerability reporting, SHA-256 checksums and a signed tag (`docs/RELEASE_CHECKLIST.md`).
 - Maintainer-only check of the demo data in early history (details kept privately).
@@ -230,7 +230,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 7. **Later (low impact):** the timeout message claims "All submitted data has been securely saved" (`INITIALIZE.timeoutCleanup`; nothing is saved, so drop the sentence); plain-text export needs a warning step; the encrypted export format has no version field and reuses one key for two algorithms; `max_attempts` is read from the editable `config.cfg`; a stale setup marker could let setup overwrite a real vault's salt; no directory fsync after rename; login derives the key twice; `self_destruct` still globs `*.bak.*`.
 
-Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`); the four review must-fix items (§11).
+Done: fuzz the import parser, and skip duplicates on re-import (`f40f529`, `13219f7`); the four review must-fix items (§11); Klipper refusal and exact reveal under `BUNKER_NO_EMOJI` (§12).
 
 ## 8. Gotchas
 
@@ -311,3 +311,48 @@ counted while a change is interrupted; the destroying attempt needs a typed
 
 Not done: pushing (waits on the maintainer), the re-check by the reviewer,
 and the before-tag list in §7.
+
+## 12. Generated secrets are copied, not printed (2026-11-20, Pacific time)
+
+Branch `claude/project-thread-rbp9mm`, a draft PR into `hardening/v2.0`. It
+is built on the review-fix commits of §11, so it carries them too.
+
+**Question.** Where does BUNKER still put a secret on screen without being
+asked? **Found:** three places. The password generator printed the new
+password and copied it; both encrypted exports printed a generated
+passphrase in the summary box. Everything else already asked first
+(`v` to view, `c` to copy).
+
+**What the best tools do.** `pass -c` and `gopass show -c` copy and clear
+after 45 s without printing; KeePassXC's `clip` command does the same with
+a timeout; 1Password's CLI conceals fields unless `--reveal` is given.
+Copy first, show only on request, is the common rule.
+
+**Ruling and build.**
+- `SECURE_IO.offer_secret(what, value, ask, warning="")`: copies with the
+  usual auto-clear, prints a plain-text notice, and shows the secret only
+  if the user types `v`. If the clipboard fails it says "NOT copied"
+  before the user chooses. The text has no colour, emoji or box drawing.
+- The generator and both exports show a mask and call `offer_secret`. The
+  export adds: "without it this export cannot be opened".
+- The Klipper fallback of `pyperclip` is refused (it passes the text on a
+  command line); `copy_secret` returns False as for a missing tool.
+- `reveal_secret` writes the value past the `BUNKER_NO_EMOJI` filter, so a
+  viewed password keeps every character.
+- Tests: `tests/test_offer_secret.py` (16 tests: the helper, the generator
+  screen, a real encrypted export opened in a new vault with the copied
+  passphrase, Klipper, emoji). 158 tests pass on Python 3.13.
+
+**Not done, in order:**
+1. The existing view prompts still treat `v` and `c` as equals. Making
+   Enter mean copy needs the near-identical blocks (8 for passwords, more for notes) in `main/DESKTOP.py`
+   (search `Type 'v' to view`) moved to one helper first. Maintainer call
+   (§6.8).
+2. The import preview's "display passwords?" still prints every password
+   when answered yes. It is asked for, but there is no copy alternative.
+3. A viewed secret stays in terminal scrollback (`docs/THREAT_MODEL.md`
+   §6.11). An alternate-screen reveal would fix that on most terminals.
+4. Mobile has no generator or export, so nothing changed there.
+5. Not walked by hand in a real terminal with a real clipboard tool, and
+   not run on Python 3.10, macOS or Windows; CI on the PR covers those.
+

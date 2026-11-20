@@ -53,6 +53,19 @@ a known limitation, it says so.
 - **Secrets are shown only when you ask.** Passwords and note contents are
   printed only after you choose to view them, all through one display function.
   Nothing writes them to a log file.
+- **Generated passwords and passphrases are copied, not printed.** The
+  password generator and the encrypted export's generated passphrase used to
+  appear on screen straight away. They are now copied to the clipboard (and
+  cleared like any other copy) and shown masked; type `v` at the prompt to
+  see one on screen. If the clipboard is unavailable, BUNKER says that
+  nothing was copied before you decide.
+- **A password you view is shown exactly as stored.** With `BUNKER_NO_EMOJI`
+  set, emoji and symbol characters inside a viewed password or note were
+  dropped from the display. Only BUNKER's own text is filtered now.
+- **The KDE Klipper clipboard fallback is not used.** That tool receives the
+  copied text as a command-line argument, which other users on the same
+  computer can read. BUNKER treats it as "no clipboard"; see Known
+  limitations.
 - **The System info screen asks before going online.** It used to look up
   your public IP from three web services every time you opened it, even if
   you declined to see network details. It now does so only after you answer
@@ -142,6 +155,7 @@ python3 -m unittest discover -s tests -t .
 
 The tests cover the first-run flow end to end with real encryption, the
 self-destruct policy, clipboard clearing (timer, outages, terminal close),
+generated secrets being copied instead of printed,
 safe error text, atomic and owner-only file writes, plain output, that the
 System info screen stays offline unless you ask for your public IP, and a
 fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
@@ -175,6 +189,11 @@ protection stops.
   `xclip`, `xsel` or `wl-clipboard` (Wayland). Without one, BUNKER says
   "Could not access the clipboard" and nothing is copied or shown; you can
   still view a password on screen when you choose to.
+  On KDE, the built-in Klipper fallback is refused on purpose, so install
+  one of those tools there too.
+- **A generated export passphrase is on the clipboard for 30 seconds.**
+  Paste it somewhere safe, or type `v` to see it, before you move on. If you
+  lose it, that export cannot be opened; export again to get a new one.
 - **Terminal width decides the suggested interface.** BUNKER guesses
   mobile for terminals up to 80 columns and tablet up to 120, and asks you
   to confirm. Answer **n** and choose Desktop/Laptop if the guess is wrong.

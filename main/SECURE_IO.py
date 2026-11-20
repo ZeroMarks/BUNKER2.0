@@ -160,6 +160,8 @@ def clear_clipboard_if_ours():
         try:
             copy, paste = _clipboard()
         except Exception:
+            # Keep tracking it so a later attempt (e.g. at exit) can retry.
+            _fingerprint = expected
             return False
         try:
             current = paste()
@@ -210,32 +212,50 @@ def reveal_secret(label, value, out=None):
 SHOW_KEY = "v"
 
 
-def offer_secret(what, value, ask, timeout=CLIPBOARD_CLEAR_SECONDS, warning=""):
+def offer_secret(what, value, ask, timeout=CLIPBOARD_CLEAR_SECONDS, warning="",
+                 required=False, stop=()):
     """Hand over a secret BUNKER has just generated: clipboard first, screen
     only if the user asks.
 
     ``what`` names it ("Generated password"). ``ask`` is the prompt function
-    (``timeoutInput``); its answer is returned so the caller can handle a
-    timeout. The secret is copied with the usual auto-clear and is printed
+    (``timeoutInput``); its last answer is returned so the caller can handle
+    a timeout. The secret is copied with the usual auto-clear and is printed
     only when the user types ``v``. If the clipboard is unavailable the user
     is told plainly that nothing was copied. ``warning`` is one extra plain
     sentence shown before the prompt (for example what is lost without it).
 
+    ``required`` is for a secret the user cannot get again (an export
+    passphrase). If it could not be copied, the screen is the only way to
+    hand it over, so the prompt repeats until the user types ``v``; it never
+    lets them continue with nothing. ``stop`` lists answers that end the
+    prompt anyway (the caller's timeout code).
+
     All text here is plain: no colour, emoji or box drawing, so it reads the
     same in a screen reader and with NO_COLOR.
     """
-    if copy_secret(value, timeout):
+    copied = copy_secret(value, timeout)
+    if copied:
         print(copy_notice(what, timeout))
-        skip = "press Enter to continue without showing it"
     else:
         print(f"Could not access the clipboard. {what} was NOT copied.")
-        skip = "press Enter to continue without it"
     if warning:
         print(warning)
-    answer = ask(f"Type '{SHOW_KEY}' then Enter to show it on screen, or {skip}: ")
-    if isinstance(answer, str) and answer.strip().lower() == SHOW_KEY:
-        reveal_secret(f"{what}: ", value)
-    return answer
+    if copied:
+        prompt = (f"Type '{SHOW_KEY}' then Enter to show it on screen, "
+                  f"or press Enter to continue without showing it: ")
+    elif required:
+        prompt = f"Type '{SHOW_KEY}' then Enter to show it on screen: "
+    else:
+        prompt = (f"Type '{SHOW_KEY}' then Enter to show it on screen, "
+                  f"or press Enter to continue without it: ")
+    while True:
+        answer = ask(prompt)
+        if isinstance(answer, str) and answer.strip().lower() == SHOW_KEY:
+            reveal_secret(f"{what}: ", value)
+            return answer
+        if copied or not required or not isinstance(answer, str) or answer in stop:
+            return answer
+        print(f"It was not copied, so it has to be shown. Type '{SHOW_KEY}' then Enter.")
 
 
 def mask(value=None):

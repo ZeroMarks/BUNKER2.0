@@ -355,9 +355,15 @@ Copy first, show only on request, is the common rule.
   command line); `copy_secret` returns False as for a missing tool.
 - `reveal_secret` writes the value past the `BUNKER_NO_EMOJI` filter, so a
   viewed password keeps every character.
-- Tests: `tests/test_offer_secret.py` (16 tests: the helper, the generator
-  screen, a real encrypted export opened in a new vault with the copied
-  passphrase, Klipper, emoji). 158 tests pass on Python 3.13.
+- An export passphrase is `required=True`: if it could not be copied, the
+  prompt repeats until the user types `v`, because the export is already
+  written and nothing else can open it.
+- Tests: `tests/test_offer_secret.py` (the helper, the generator screen, a
+  real encrypted export opened in a new vault with the copied passphrase
+  and with no clipboard, Klipper, emoji). 163 tests pass on Python 3.13; CI
+  was green on all 12 OS and Python jobs before the review follow-ups.
+- An independent review of the diff found the unopenable-export case above
+  and two weak tests; all three are fixed.
 
 **Not done, in order:**
 1. The existing view prompts still treat `v` and `c` as equals. Making
@@ -369,5 +375,7 @@ Copy first, show only on request, is the common rule.
 3. A viewed secret stays in terminal scrollback (`docs/THREAT_MODEL.md`
    §6.11). An alternate-screen reveal would fix that on most terminals.
 4. Mobile has no generator or export, so nothing changed there.
-5. Not walked by hand in a real terminal with a real clipboard tool, and
-   not run on Python 3.10, macOS or Windows; CI on the PR covers those.
+5. Not walked by hand in a real terminal with a real clipboard tool.
+6. A generated passphrase pasted after the 30 s clear, or left at the
+   prompt until auto-logout, is gone. The export must then be made again.
+   Offering the passphrase before the file is written would close this.

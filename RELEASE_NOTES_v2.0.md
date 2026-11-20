@@ -58,10 +58,12 @@ a known limitation, it says so.
   appear on screen straight away. They are now copied to the clipboard (and
   cleared like any other copy) and shown masked; type `v` at the prompt to
   see one on screen. If the clipboard is unavailable, BUNKER says that
-  nothing was copied before you decide.
-- **A password you view is shown exactly as stored.** With `BUNKER_NO_EMOJI`
+  nothing was copied before you decide, and an export passphrase is then
+  always shown, because there is no other way to give it to you.
+- **A password you view is no longer filtered.** With `BUNKER_NO_EMOJI`
   set, emoji and symbol characters inside a viewed password or note were
-  dropped from the display. Only BUNKER's own text is filtered now.
+  dropped from the display. Only BUNKER's own text is filtered now. (A
+  terminal that cannot encode a character still shows `?` for it.)
 - **The KDE Klipper clipboard fallback is not used.** That tool receives the
   copied text as a command-line argument, which other users on the same
   computer can read. BUNKER treats it as "no clipboard"; see Known

@@ -94,6 +94,47 @@ class OfferSecret(Base):
         shown, _p, _r = self.offer("v")
         self.assertEqual(shown.count(SECRET), 1)
 
+    def test_required_secret_cannot_be_skipped_when_not_copied(self):
+        self.use_clip(broken=True)
+        typed = iter(["", "y", ".c", "v"])
+        prompts = []
+
+        def ask(prompt):
+            prompts.append(prompt)
+            return next(typed)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            result = SECURE_IO.offer_secret("Passphrase", SECRET, ask, required=True)
+        self.assertEqual(result, "v")
+        self.assertEqual(len(prompts), 4)
+        self.assertNotIn("continue without", "".join(prompts))
+        self.assertEqual(out.getvalue().count(SECRET), 1)
+        self.assertTrue(out.getvalue().rstrip().endswith(SECRET))  # shown only at the end
+
+    def test_required_secret_stops_on_the_callers_timeout_code(self):
+        self.use_clip(broken=True)
+        out, prompts, result = self.offer("*T*", required=True, stop=("*T*",))
+        self.assertEqual((result, len(prompts)), ("*T*", 1))
+        self.assertNotIn(SECRET, out)
+        out, prompts, result = self.offer(None, required=True)
+        self.assertIsNone(result)
+
+    def test_required_secret_that_was_copied_can_be_skipped(self):
+        self.use_clip()
+        out, prompts, result = self.offer("", required=True)
+        self.assertEqual(len(prompts), 1)
+        self.assertNotIn(SECRET, out)
+        self.assertEqual(self.clip.value, SECRET)
+
+    def test_failed_clear_is_retried_when_the_clipboard_comes_back(self):
+        self.use_clip()
+        SECURE_IO.copy_secret(SECRET, timeout=60)
+        with mock.patch.object(SECURE_IO, "_clipboard", side_effect=RuntimeError("down")):
+            self.assertFalse(SECURE_IO.clear_clipboard_if_ours())
+        self.assertTrue(SECURE_IO.has_pending_secret())
+        self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
+        self.assertEqual(self.clip.value, "")
+
     def test_warning_comes_before_the_prompt(self):
         self.use_clip()
         out, prompts, _result = self.offer("", warning="Keep it safe.")
@@ -146,7 +187,9 @@ class GeneratorScreen(Base):
         out, _asked = self.run_generator("v")
         self.assertEqual(out.count(self.clip.value), 1)
 
-    def test_timeout_at_the_offer_logs_out_without_printing(self):
+    def test_timeout_code_at_the_offer_returns_without_printing(self):
+        # A real timeout exits the process inside timeoutInput; this is the
+        # fallback path where the prompt hands back its timeout code.
         out, asked = self.run_generator(D.timeoutGlobalCode)
         self.assertNotIn(self.clip.value, out)
         self.assertEqual(sum("Press 'enter'" in p for p in asked), 0)
@@ -156,10 +199,12 @@ class GeneratedExportPassphrase(Base):
     """Encrypted export with a generated passphrase (.g): the passphrase goes
     to the clipboard, is not printed, and opens the export in a new vault."""
 
-    def run_flow(self, func, key, table):
+    def run_flow(self, func, key, table, show_answers=None):
         import main.INITIALIZE as I
 
         def answer(prompt, *_a, **_k):
+            if show_answers is not None and "show it on screen" in prompt:
+                return next(show_answers)
             for needle, value in table.items():
                 if needle in prompt:
                     return value
@@ -174,7 +219,7 @@ class GeneratedExportPassphrase(Base):
             func(key, I.loadDatabase(key))
         return out.getvalue()
 
-    def export_with_generated_passphrase(self, show):
+    def export_with_generated_passphrase(self, show, show_answers=None, passphrase_from=None):
         import shutil
         from tests import test_backup_roundtrip as R
         from tests.test_vault_integrity import PASSWORD, key_for, run_setup
@@ -192,8 +237,8 @@ class GeneratedExportPassphrase(Base):
             "see the password as you type": "y", "show your password while typing": "y",
             "passphrase for encryption": ".g", "file name to save profiles": "b.json",
             "Continue with export": "y", "show it on screen": show, "Press 'enter'": "",
-        })
-        passphrase = self.clip.value
+        }, show_answers)
+        passphrase = passphrase_from["v"] if passphrase_from else self.clip.value
         shutil.copy("b.json", os.path.join(dst, "b.json"))
         os.chdir(dst)
         self.assertTrue(run_setup())
@@ -211,6 +256,21 @@ class GeneratedExportPassphrase(Base):
         self.assertEqual(len(passphrase), 16)
         self.assertNotIn(passphrase, out)
         self.assertIn("without it this export cannot be opened", out)
+
+    def test_without_a_clipboard_the_passphrase_must_be_shown(self):
+        self.use_clip = lambda broken=False: Base.use_clip(self, broken=True)
+        seen = {}
+        real_reveal = SECURE_IO.reveal_secret
+
+        def spy(label, value, out=None):
+            seen["v"] = value
+            return real_reveal(label, value, out)
+        answers = iter(["", "v"])
+        with mock.patch.object(SECURE_IO, "reveal_secret", spy):
+            out, _empty = self.export_with_generated_passphrase(
+                show=None, show_answers=answers, passphrase_from=seen)
+        self.assertEqual(out.count(seen["v"]), 1)
+        self.assertIn("NOT copied", out)
 
     def test_passphrase_is_shown_on_request(self):
         out, passphrase = self.export_with_generated_passphrase(show="v")
@@ -235,6 +295,13 @@ class NoSecretPrintedWithoutAsking(unittest.TestCase):
             self.assertFalse(
                 used & {"generated_passphrase", "passphrase", "add_password", "edit_password"},
                 f"line {node.lineno}: {name}() is given a generated secret")
+        generator = next(n for n in ast.walk(tree)
+                         if isinstance(n, ast.FunctionDef) and n.name == "pwdGenerate")
+        for node in ast.walk(generator):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") in (
+                    "print", "reveal_secret", "to_clipboard"):
+                used = {n.id for a in node.args for n in ast.walk(a) if isinstance(n, ast.Name)}
+                self.assertNotIn("password", used, f"line {node.lineno}")
 
 
 class KlipperRefused(Base):

@@ -3819,6 +3819,7 @@ def exportNotes(hashed_pass, db):
             if offer_secret(
                 "Passphrase", generated_passphrase, timeoutInput,
                 warning="Save it in a safe place now: without it this export cannot be opened.",
+                required=True, stop=(timeoutGlobalCode,),
             ) == timeoutGlobalCode:
                 return True
         elif export_encrypted:
@@ -4427,6 +4428,7 @@ def exportProfiles(hashed_pass, db):
                 if offer_secret(
                     "Passphrase", generated_passphrase, timeoutInput,
                     warning="Save it in a safe place now: without it this export cannot be opened.",
+                    required=True, stop=(timeoutGlobalCode,),
                 ) == timeoutGlobalCode:
                     return True
             elif export_encrypted:

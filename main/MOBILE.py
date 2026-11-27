@@ -64,16 +64,29 @@ class ModernUI:
     def input_prompt(prompt):
         return input(f"{L_CYAN}{prompt}: {RESET}")
     
+    # How long the "Press Enter" pause waits before auto-logout; main() sets
+    # it from the saved setting.
+    pause_timeout = 60
+
     @staticmethod
     def success_message(msg):
-        print(f"\n{GREEN}✓ {msg}{RESET}")
+        print(f"\n{GREEN}✓ Done: {msg}{RESET}")
         time.sleep(1)
-    
+
     @staticmethod
     def error_message(msg):
-        print(f"\n{RED}✗ {msg}{RESET}")
+        # An error stays on screen until the user presses Enter. It used to
+        # disappear after one second, too fast to read or to be spoken by a
+        # screen reader. The words "Error:" and "Done:" carry the meaning,
+        # so it does not depend on the colour or the symbol.
+        print(f"\n{RED}✗ Error: {msg}{RESET}")
+        timeoutInput(f"{VINTAGE}Press Enter to continue: {RESET}", ModernUI.pause_timeout)
+
+    @staticmethod
+    def farewell(msg):
+        print(f"\n{GREEN}{msg}{RESET}")
         time.sleep(1)
-    
+
     @staticmethod
     def confirmation_prompt(prompt):
         return input(f"{MUSTARD}{prompt} (y/n): {RESET}").lower() == 'y'
@@ -91,6 +104,7 @@ def main(device_type='mobile'):
     max_attempts = ui_config["max_attempts"]
     disable_ipv4 = ui_config["disable_ipv4"]
     current_timeout = ui_config["current_timeout"]
+    ModernUI.pause_timeout = current_timeout
     
     # First check if vault exists
     try:
@@ -262,7 +276,7 @@ def main(device_type='mobile'):
         choice = vault_ui.ui.input_prompt("Select option")
         
         if choice == '0':
-            vault_ui.ui.success_message("Thank you for using BUNKER!")
+            vault_ui.ui.farewell("Thank you for using BUNKER!")
             break
         elif choice == '1':
             mobile_note_manager(vault_key, contents, device_type)
@@ -303,8 +317,9 @@ def main(device_type='mobile'):
                 vault_ui.ui.menu_item('0', 'Back')
                 security_choice = vault_ui.ui.input_prompt("Select option")
                 if security_choice == '1':
-                    vault_ui.ui.success_message("Master password change not implemented yet")
-                    time.sleep(1)
+                    vault_ui.ui.error_message(
+                        "Changing the master password is not available in the mobile "
+                        "interface. Use the desktop interface.")
         else:
             vault_ui.ui.error_message("Invalid option")
 
@@ -836,7 +851,7 @@ def mobile_feature_select(hashed_pass, device_type='mobile'):
             elif choice == '3':
                 mobile_profile_manager(hashed_pass, contents, device_type)
             elif choice == '0':
-                vault_ui.ui.success_message("Goodbye!")
+                vault_ui.ui.farewell("Goodbye!")
                 break
             else:
                 vault_ui.ui.error_message("Invalid option")

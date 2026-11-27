@@ -194,6 +194,11 @@ class _WindowsClipboard:
 
     @contextlib.contextmanager
     def _open(self):
+        # Known limit: a signal handler that clears the clipboard while this
+        # thread already has it open (inside copy) cannot open it again; the
+        # retries run out and that clear reports failure, so the secret stays
+        # tracked. BUNKER's own Ctrl+C handler exits without raising here.
+        #
         # SetClipboardData fails if the clipboard was opened without an
         # owner window and then emptied, so open it with a hidden window of
         # our own (never shown; destroyed straight after).
@@ -219,22 +224,34 @@ class _WindowsClipboard:
         handle = self._kernel32.GlobalAlloc(self.GMEM_MOVEABLE, len(data))
         if not handle:
             raise OSError("clipboard memory")
+        owned_by_windows = False
         try:
             pointer = self._kernel32.GlobalLock(handle)
             if not pointer:
                 raise OSError("clipboard memory")
             ctypes.memmove(pointer, data, len(data))
             self._kernel32.GlobalUnlock(handle)
-            if not self._user32.SetClipboardData(fmt, handle):
+            owned_by_windows = bool(self._user32.SetClipboardData(fmt, handle))
+            if not owned_by_windows:
                 raise OSError("clipboard refused the data")
         except BaseException:
-            # Windows owns the memory only after SetClipboardData succeeds.
-            # Overwrite before freeing: this block may hold the secret.
-            pointer = self._kernel32.GlobalLock(handle)
-            if pointer:
-                ctypes.memset(pointer, 0, len(data))
-                self._kernel32.GlobalUnlock(handle)
-            self._kernel32.GlobalFree(handle)
+            # Windows owns the memory once SetClipboardData succeeds, and
+            # frees it at the next EmptyClipboard; freeing it here too would
+            # free it twice. An interrupt can land after the call succeeded
+            # but before its result was stored, so ask the clipboard too.
+            # Memory that is still ours is overwritten before it is freed,
+            # because it may hold the secret.
+            if not owned_by_windows:
+                try:
+                    owned_by_windows = self._user32.GetClipboardData(fmt) == handle
+                except Exception:
+                    owned_by_windows = True   # unsure: leak it rather than free twice
+            if not owned_by_windows:
+                pointer = self._kernel32.GlobalLock(handle)
+                if pointer:
+                    ctypes.memset(pointer, 0, len(data))
+                    self._kernel32.GlobalUnlock(handle)
+                self._kernel32.GlobalFree(handle)
             raise
 
     def _mark_format(self, name):
@@ -395,6 +412,10 @@ class _MacClipboard:
         text = str(text)
         if not text:
             return self.clear()
+        if "\x00" in text:
+            # paste() reads the text back up to the first NUL, so a copy
+            # holding one would never be recognised and never cleared.
+            raise ValueError("text cannot be copied")
         with self._pool():
             board = self._pasteboard()
             with self._string(text) as secret, \
@@ -457,6 +478,9 @@ def _digest(text):
     # Clipboard backends may rewrite line endings or trailing whitespace, so
     # compare a normalised form; otherwise a copied note might never match.
     norm = str(text).replace("\r\n", "\n").replace("\r", "\n").rstrip()
+    # A surrogate pair held as two code points comes back from the clipboard
+    # as one character; join pairs so both forms give the same fingerprint.
+    norm = norm.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "surrogatepass")
     return hmac.new(_FINGERPRINT_KEY, norm.encode("utf-8", "surrogatepass"),
                     hashlib.sha256).digest()
 

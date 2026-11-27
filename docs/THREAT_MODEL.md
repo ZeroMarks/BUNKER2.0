@@ -102,11 +102,15 @@ concern for AES-GCM.
    - *Windows:* BUNKER sets the three clipboard formats Windows documents
      for this (`ExcludeClipboardContentFromMonitorProcessing`,
      `CanIncludeInClipboardHistory` = 0, `CanUploadToCloudClipboard` = 0)
-     before the text, so Windows' own history (Win+V) and cloud clipboard
-     leave the copy out. If they cannot be set, nothing is copied.
+     before the text. Microsoft documents that Windows' own history (Win+V)
+     and cloud clipboard then leave the copy out; tests confirm the marks
+     are set, not yet what the Win+V list shows. If they cannot be set,
+     nothing is copied.
      Third-party clipboard managers honour them only by choice.
-   - *macOS:* the copy is limited to the current device (no Universal
-     Clipboard) and carries `org.nspasteboard.ConcealedType`. That marker
+   - *macOS:* the pasteboard is prepared with the current-device-only
+     option (meant to keep it from Universal Clipboard; this option cannot
+     be read back, so tests only check that it is requested) and the copy
+     carries `org.nspasteboard.ConcealedType`. That marker
      is a convention between apps, not something macOS enforces. If the
      pasteboard API cannot be reached, BUNKER falls back to `pbcopy`
      without the marks.

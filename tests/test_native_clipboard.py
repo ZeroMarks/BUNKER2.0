@@ -39,6 +39,7 @@ class FakeWindows:
         self.fail_empty = False
         self.fail_alloc = False
         self.windows = set()
+        self.locked = {}        # handle -> lock count
         self._next = 0x1000
         self.user32 = self
         self.kernel32 = self
@@ -54,6 +55,7 @@ class FakeWindows:
         return 1
 
     def OpenClipboard(self, window):
+        self.owner_window = window
         if self.busy_for:
             self.busy_for -= 1
             return 0
@@ -89,6 +91,9 @@ class FakeWindows:
 
     def SetClipboardData(self, fmt, handle):
         assert self.is_open
+        assert not self.locked.get(handle), "block still locked when handed to Windows"
+        if not self.owner_window:
+            return 0            # documented: fails after EmptyClipboard with no owner
         name = self.name_of(fmt)
         if name in self.fail_set:
             return 0
@@ -113,15 +118,19 @@ class FakeWindows:
         return self._next
 
     def GlobalLock(self, handle):
+        self.locked[handle] = self.locked.get(handle, 0) + 1
         return ctypes.addressof(self.blocks[handle])
 
     def GlobalUnlock(self, handle):
+        self.locked[handle] -= 1
         return 0
 
     def GlobalSize(self, handle):
         return len(self.blocks[handle])
 
     def GlobalFree(self, handle):
+        assert handle not in self.clipboard.values(), "freed memory Windows owns"
+        assert not self.locked.get(handle), "freed a locked block"
         self.freed.append(bytes(self.blocks.pop(handle)))
         return 0
 
@@ -251,6 +260,32 @@ class WindowsBackend(unittest.TestCase):
             self.cb.copy("abc\x00def")
         self.assertEqual(self.win.log, [])
 
+    def test_without_an_owner_window_nothing_is_copied(self):
+        self.win.CreateWindowExW = lambda *a: 0
+        with self.assertRaises(OSError):
+            self.cb.copy(SECRET)
+        self.assertEqual(self.win.clipboard, {})
+        self.assertFalse(self.win.is_open)
+
+    def test_interrupt_after_windows_took_the_memory_does_not_free_it(self):
+        real_set = self.win.SetClipboardData
+
+        def set_then_interrupt(fmt, handle):
+            result = real_set(fmt, handle)
+            if fmt == 13:
+                raise KeyboardInterrupt
+            return result
+        self.win.SetClipboardData = set_then_interrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.cb.copy(SECRET)
+        self.assertEqual(self.win.clipboard, {})   # emptied, Windows freed it
+        self.assertEqual(self.win.freed, [])       # BUNKER freed nothing itself
+
+    def test_every_lock_is_released(self):
+        self.cb.copy(SECRET)
+        self.cb.paste()
+        self.assertTrue(all(count == 0 for count in self.win.locked.values()))
+
     def test_window_and_clipboard_are_released_after_every_call(self):
         self.cb.copy(SECRET)
         self.cb.paste()
@@ -367,6 +402,11 @@ class MacBackend(unittest.TestCase):
         self.mac.unreadable = True
         with self.assertRaises(OSError):
             self.cb.paste()
+
+    def test_text_with_a_nul_is_refused_not_truncated(self):
+        with self.assertRaises(ValueError):
+            self.cb.copy("abc\x00def")
+        self.assertEqual(self.mac.log, [])
 
     def test_clear_and_empty_copy_remove_everything(self):
         self.cb.copy(SECRET)

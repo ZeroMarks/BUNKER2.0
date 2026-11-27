@@ -28,7 +28,7 @@ class Messages(unittest.TestCase):
         self.assertIn("Press Enter to continue", asked[0][0])
         self.assertEqual(slept, [])
 
-    def test_error_pause_still_logs_out_when_idle(self):
+    def test_error_pause_uses_the_auto_logout_setting(self):
         with mock.patch.object(MB.ModernUI, "pause_timeout", 45):
             _, asked, _ = self.show("error_message", "x")
         self.assertEqual(asked[0][1], 45)

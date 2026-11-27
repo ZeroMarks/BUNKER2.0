@@ -50,15 +50,18 @@ a known limitation, it says so.
   BUNKER leaves it alone. Before this fix, most desktop copy actions never
   cleared the clipboard, and the mobile one cleared it after half a second,
   too fast to paste.
-- **Windows clipboard history and cloud sync no longer keep copied
-  secrets.** Clearing the clipboard never removed the copy that Windows
+- **Copied secrets are marked for Windows clipboard history and cloud
+  sync.** Clearing the clipboard never removed the copy that Windows
   clipboard history (Win+V) or cloud clipboard had already taken. Every
-  copy is now marked with the three clipboard formats Windows provides for
-  this, so Windows leaves it out of both. If the marks cannot be set,
-  nothing is copied and BUNKER tells you. On macOS a copy now stays on
-  that Mac (it is not offered to Universal Clipboard) and carries the
-  `org.nspasteboard.ConcealedType` marker that many clipboard managers
-  respect. Linux is unchanged; see Known limitations.
+  copy now carries the three clipboard formats Microsoft documents for
+  leaving content out of both. If the marks cannot be set, nothing is
+  copied and BUNKER tells you. On macOS a copy is made with the option
+  Apple documents for keeping it on that Mac (not offered to Universal
+  Clipboard) and carries the `org.nspasteboard.ConcealedType` marker
+  that clipboard managers following the nspasteboard.org convention
+  skip. If BUNKER cannot reach the macOS pasteboard API, it copies
+  through `pbcopy` without these marks. Linux is unchanged; see Known
+  limitations.
 - **Secrets are shown only when you ask.** Passwords and note contents are
   printed only after you choose to view them, all through one display function.
   Nothing writes them to a log file.
@@ -208,8 +211,10 @@ protection stops.
   and every clipboard manager on Linux (including KDE's Klipper), may
   keep a copy after BUNKER clears the clipboard. Turn their history off
   or exclude your terminal. The Windows and macOS marks were checked on
-  the project's automated test machines (that the marks are on the
-  clipboard, and that copy, paste and clear work); nobody has yet
+  the project's automated test machines (that the Windows marks and the
+  macOS concealed marker are on the clipboard, and that copy, paste and
+  clear work; the macOS this-Mac-only option cannot be read back, so only
+  the request for it is tested); nobody has yet
   confirmed by hand that a copy stays out of the Win+V list or off
   another Apple device, and Intel Macs were not tested.
 - **Copying to the clipboard on Linux needs a clipboard tool.** Install

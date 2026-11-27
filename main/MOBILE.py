@@ -134,6 +134,7 @@ def main(device_type='mobile'):
         max_attempts = ui_config["max_attempts"]
         disable_ipv4 = ui_config["disable_ipv4"]
         current_timeout = ui_config["current_timeout"]
+        ModernUI.pause_timeout = current_timeout
 
     # First check if vault exists
     try:

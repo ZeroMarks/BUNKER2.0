@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§13); judge pass (§12).
+you should not need anything else to start. Last updated 2026-11-27 (PT): Windows and macOS clipboard marks, mobile errors wait for Enter (§14); generated secrets are copied, not printed (§13); judge pass (§12).
 
 **Next three moves:** (1) once the waiting commits are pushed, keep CI
 green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
@@ -83,8 +83,10 @@ into `main`.
 |---|---|---|---|
 | `hardening/v2.0` | [#1](https://github.com/ZeroMarks/BUNKER2.0/pull/1) (draft) | `main` | All hardening, docs, CI. It also carries `desktop-latest`. `main`'s 9 extra commits are joined by a keep-ours merge, `2bf452f`. |
 | `mobile/shared-vault` | [#2](https://github.com/ZeroMarks/BUNKER2.0/pull/2) (draft) | `hardening/v2.0` | Mobile UI on the shared vault format, plus atomic `Bunker.mmf` writes everywhere. |
+| `claude/project-thread-rbp9mm` | [#5](https://github.com/ZeroMarks/BUNKER2.0/pull/5) (draft) | `hardening/v2.0` | The review-fix commits of §11 and the generated-secret handover of §13. |
+| `claude/project-thread-9x8stz` | [#6](https://github.com/ZeroMarks/BUNKER2.0/pull/6) (draft) | #5's branch | Clipboard marks on Windows and macOS; mobile errors wait for Enter (§14). |
 
-Merge order: #1, then #2. Both are drafts for the maintainer's review.
+Merge order: #5 and #6 into `hardening/v2.0`, then #1, then #2. All are drafts for the maintainer's review.
 `hardening/v2.0` is merged into `mobile/shared-vault` regularly; the last
 merge is `e53dde9`.
 
@@ -322,11 +324,11 @@ The 14 waiting commits apply cleanly on `hardening/v2.0` and 142 tests pass (Lin
 
 **Before tagging:**
 - `stop_ip_fetch_thread()` does not stop the thread (section 7); it also starts a second one on the next "on".
-- Windows clipboard history and cloud clipboard keep copied secrets. First step: in `SECURE_IO`, set the registered formats `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory` = 0 and `CanUploadToCloudClipboard` = 0 alongside the text (as KeePassXC does).
+- ~~Windows clipboard history and cloud clipboard keep copied secrets.~~ Done in §14 (PR #6); a hand check on a real Windows desktop is still open.
 
 - Setup never warns that wrong passwords destroy the vault: `vaultSetup` doesn't mention the limit, its `.g` guide says "not implemented", and `display_setup_guide()` is never called. First step: one line before the password prompt, built from `max_attempts`, with Enter to acknowledge; build the guide's "three" from `max_attempts` too.
 
-**Later:** mobile errors disappear after one second (wait for Enter instead); mobile edit or delete of an entry changed elsewhere gives a bare `KeyError` or a false "deleted"; a future format should store KDF parameters in a header and bind fields to their record with GCM associated data.
+**Later:** ~~mobile errors disappear after one second~~ (done, §14); mobile edit or delete of an entry changed elsewhere gives a bare `KeyError` or a false "deleted"; a future format should store KDF parameters in a header and bind fields to their record with GCM associated data.
 
 ## 13. Generated secrets are copied, not printed (2026-11-20, Pacific time)
 
@@ -379,3 +381,87 @@ Copy first, show only on request, is the common rule.
 6. A generated passphrase pasted after the 30 s clear, or left at the
    prompt until auto-logout, is gone. The export must then be made again.
    Offering the passphrase before the file is written would close this.
+
+## 14. Clipboard marks and mobile error messages (2026-11-27, Pacific time)
+
+Branch `claude/project-thread-9x8stz`, draft PR #6, stacked on #5.
+
+**Question.** After BUNKER clears the clipboard, who still has the copy?
+**Found:** Windows clipboard history (Win+V) and cloud clipboard, macOS
+Universal Clipboard, and any clipboard manager. `pyperclip` can only set
+plain text, so nothing told them the copy was a secret.
+
+**What the platforms and the best tools do.**
+- Windows documents three registered clipboard formats for exactly this:
+  `ExcludeClipboardContentFromMonitorProcessing` (any data),
+  `CanIncludeInClipboardHistory` and `CanUploadToCloudClipboard` (a DWORD
+  of zero). Source: Microsoft, "Clipboard Formats", section "Cloud
+  Clipboard and Clipboard History Formats"
+  (https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats).
+  KeePassXC sets the same formats (`src/gui/Clipboard.cpp`).
+- macOS: `NSPasteboard.ContentsOptions.currentHostOnly` keeps the contents
+  "available only on the current device" (Apple, AppKit documentation).
+  `org.nspasteboard.ConcealedType` marks confidential content for
+  clipboard managers (https://nspasteboard.org/); it is a convention.
+- KDE: Klipper skips content carrying `x-kde-passwordManagerHint`. The
+  command-line tools BUNKER uses on Linux (`xclip`, `xsel`, `wl-copy`) set
+  one format per call, so they cannot attach it.
+
+**Ruling and build.**
+- `SECURE_IO._WindowsClipboard` (ctypes, no new dependency): copy, read
+  and clear through the Win32 API. The three marks are set before the
+  text inside one open/close. If a mark cannot be set the clipboard is
+  emptied and the copy fails; there is no fallback to an unmarked copy on
+  Windows.
+- `SECURE_IO._MacClipboard` (ctypes and the Objective-C runtime): current
+  host only, concealed marker first, then the text. If the backend cannot
+  be built at all, the old `pbcopy` path is used (unmarked); a failure
+  during one copy fails that copy.
+- Linux is unchanged and documented as not marked.
+- The fingerprint, timer and fail-closed rules in `copy_secret` and
+  `clear_clipboard_if_ours` are untouched; only the backend under them
+  changed.
+- Mobile: `ModernUI.error_message` waits for Enter (through
+  `timeoutInput`, so auto-logout still applies) and messages start with
+  "Error:" or "Done:".
+
+**Independent review** (Opus, of the full diff) found a macOS fail-open
+(a secret holding a NUL could never be recognised and cleared), a
+possible double free if an interrupt landed right after Windows took
+the memory, and wording that claimed more than was checked. All fixed,
+with tests.
+
+**Verified.**
+- `tests/test_native_clipboard.py`: both backends with the system calls
+  replaced by fakes (order of calls, exact bytes, every failure path,
+  nothing left allocated or open), and backend selection per system.
+- The same file's `Real...` classes use the real clipboard. They run only
+  with `BUNKER_TEST_REAL_CLIPBOARD=1`, which CI sets. On the CI machines
+  (Windows x64, macOS arm64, Python 3.10-3.13) they passed: the marks are
+  on the clipboard, another program can paste the text, a later copy by
+  another program is left alone, and the timer thread clears. The macOS
+  current-host-only option cannot be read back; only the request for it
+  is tested. That it applies to items written with `setString:forType:`
+  is from Apple's documentation, not observed.
+- `tests/test_mobile_messages.py`.
+
+**Not verified.** Nobody has looked at a real Win+V list, a second Apple
+device, or a clipboard manager to see the copy being skipped; the CI
+machines only prove the marks are set. Not run on Intel Macs, Windows on
+ARM or 32-bit Python. `docs/RELEASE_CHECKLIST.md` has the two hand checks.
+
+**Not done, in order.**
+1. The KDE hint. It needs BUNKER to own the selection itself (X11 or
+   Wayland protocol code, or a Qt dependency) rather than call a tool.
+2. Mobile edit or delete of an entry changed on another device (a named
+   error instead of `KeyError`, the favourite toggle computed at save
+   time). That code only exists on `mobile/shared-vault` (#2); do it
+   there after the merge.
+3. Merging with #2 will conflict in `main/MOBILE.py` at `ModernUI`
+   (#2 only strips trailing spaces there): keep this branch's
+   `error_message`, `success_message` and `farewell`.
+4. Mobile success messages still disappear after one second.
+5. Review nits left: a NUL refused on Windows shows the generic "Could
+   not access the clipboard"; a clear that fails because the clipboard
+   is busy is retried only at exit, not by the timer.
+

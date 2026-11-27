@@ -23,7 +23,7 @@ BUNKER 2.0 is a locally-stored, offline password and notes manager built with pr
 - **Password Generator** - Create strong random passwords, copied to the clipboard and shown only if you ask
 - **Encrypted Notes** - Secure storage for sensitive information
 - **Encrypted Export/Import** - Back up profiles and notes with a passphrase
-- **Clipboard Auto-Clear** - Copied passwords and notes are cleared after 30 seconds and when BUNKER closes
+- **Clipboard Auto-Clear** - Copied passwords and notes are cleared after 30 seconds and when BUNKER closes. On Windows they carry the marks Windows documents for leaving content out of clipboard history (Win+V) and cloud sync; see [what clipboard clearing covers](#what-clipboard-clearing-covers)
 - **IP Display Toggle** - Optionally show your public IP
 - **Failed-Login Limit** - Too many wrong master passwords wipes the vault
 
@@ -65,7 +65,7 @@ cd ~/Desktop/BUNKER2.0
 
 **Required Dependencies:**
 - `cryptography` - **AES-256 encryption library**
-- `pyperclip` - Secure clipboard management
+- `pyperclip` - Clipboard access on Linux, and the fallback on macOS (installed on every system)
 - `psutil` - System information monitoring
 - `requests` - Network utilities
 - `argon2-cffi` - **Argon2 key derivation library** NEW
@@ -127,6 +127,32 @@ change it (5-300 seconds), set `BUNKER_CLIPBOARD_SECONDS`, for example:
 BUNKER_CLIPBOARD_SECONDS=10 python3 BUNKER.py
 ```
 
+### What clipboard clearing covers
+
+BUNKER empties the clipboard after the timeout and when it closes, if the
+clipboard still holds what BUNKER copied. Whether another program has
+already kept its own copy depends on the system:
+
+- **Windows.** Each copy carries the three clipboard formats that Microsoft
+  documents for keeping content out of clipboard history (Win+V) and off
+  your other devices. If the marks cannot be set, nothing is copied and
+  BUNKER says so. Automated tests confirm the marks are set; that the Win+V
+  list really skips the copy has not yet been checked by hand. Other
+  clipboard managers follow the marks only if their authors chose to.
+- **macOS.** Each copy is made with the option Apple documents for keeping
+  pasteboard contents on this Mac (not handed to Universal Clipboard), and
+  carries the `org.nspasteboard.ConcealedType` marker.
+  Clipboard managers that follow that convention skip it; others record
+  it. If BUNKER cannot reach the macOS pasteboard API it copies through
+  `pbcopy` instead, without these marks.
+- **Linux.** No marks are set. A clipboard manager (for example KDE's
+  Klipper or GNOME extensions) may keep a copy after BUNKER clears the
+  clipboard. Turn its history off, or exclude your terminal, if that
+  matters to you.
+- **Everywhere.** If BUNKER is force-killed or the computer loses power,
+  nothing is cleared. Remote-desktop and virtual-machine tools that share
+  the clipboard may copy it elsewhere.
+
 ### Running the tests
 
 ```bash
@@ -148,7 +174,7 @@ python3 -m unittest discover -s tests -t .
 
 **Auto-Protection:**
 - Configurable auto-logout (10-3600 seconds, or off)
-- Clipboard auto-clear after 30 seconds and on exit (only if it still holds what BUNKER copied)
+- Clipboard auto-clear after 30 seconds and on exit (only if it still holds what BUNKER copied); marked on Windows to stay out of clipboard history and cloud sync
 - Passwords and notes are shown only when you ask to view them
 
 ---

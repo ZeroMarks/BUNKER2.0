@@ -141,6 +141,17 @@ class OutputTests(unittest.TestCase):
         finally:
             SECURE_IO.set_clipboard_backend(None, None)
 
+    def test_split_surrogate_pair_still_matches(self):
+        cb = FakeClipboard()
+        SECURE_IO.set_clipboard_backend(cb.copy, cb.paste)
+        try:
+            SECURE_IO.copy_secret("key\ud83d\udd11", timeout=60)
+            cb.value = "key\U0001F511"   # how a clipboard hands the pair back
+            self.assertTrue(SECURE_IO.clear_clipboard_if_ours())
+            self.assertEqual(cb.value, "")
+        finally:
+            SECURE_IO.set_clipboard_backend(None, None)
+
     def test_fingerprint_set_before_copy(self):
         seen = {}
         def copy(text):

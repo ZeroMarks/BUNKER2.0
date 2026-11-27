@@ -50,6 +50,18 @@ a known limitation, it says so.
   BUNKER leaves it alone. Before this fix, most desktop copy actions never
   cleared the clipboard, and the mobile one cleared it after half a second,
   too fast to paste.
+- **Copied secrets are marked for Windows clipboard history and cloud
+  sync.** Clearing the clipboard never removed the copy that Windows
+  clipboard history (Win+V) or cloud clipboard had already taken. Every
+  copy now carries the three clipboard formats Microsoft documents for
+  leaving content out of both. If the marks cannot be set, nothing is
+  copied and BUNKER tells you. On macOS a copy is made with the option
+  Apple documents for keeping it on that Mac (not offered to Universal
+  Clipboard) and carries the `org.nspasteboard.ConcealedType` marker
+  that clipboard managers following the nspasteboard.org convention
+  skip. If BUNKER cannot reach the macOS pasteboard API, it copies
+  through `pbcopy` without these marks. Linux is unchanged; see Known
+  limitations.
 - **Secrets are shown only when you ask.** Passwords and note contents are
   printed only after you choose to view them, all through one display function.
   Nothing writes them to a log file.
@@ -110,6 +122,11 @@ a known limitation, it says so.
 - **Setup never overwrites an existing vault.** It used to start whenever
   `Bunker.mmf` could not be opened (e.g. locked by another program) and
   replaced the salt before its last question.
+- **Mobile error messages stay until you press Enter.** They used to
+  disappear after one second, which was too fast to read and could cut a
+  screen reader off. One of them was the recovery advice shown after an
+  interrupted password change. Messages now start with "Error:" or
+  "Done:", so their meaning does not depend on colour or a symbol.
 - **Mobile login checks passwords like desktop** and shares the same
   attempt counter.
 - **Safer file writes.** The salt, config, settings and key files are
@@ -157,6 +174,7 @@ python3 -m unittest discover -s tests -t .
 
 The tests cover the first-run flow end to end with real encryption, the
 self-destruct policy, clipboard clearing (timer, outages, terminal close),
+the Windows and macOS clipboard marks,
 generated secrets being copied instead of printed,
 safe error text, atomic and owner-only file writes, plain output, that the
 System info screen stays offline unless you ask for your public IP, and a
@@ -187,6 +205,18 @@ protection stops.
 - **Killing BUNKER with `kill -9`** (or a crash of Python itself) skips all
   cleanup, so a password copied less than 30 seconds earlier stays on the
   clipboard.
+- **Clipboard managers may keep copied secrets.** Windows' own history
+  and sync skip BUNKER's copies, and on macOS managers that follow the
+  nspasteboard.org convention do. Other clipboard managers on any system,
+  and every clipboard manager on Linux (including KDE's Klipper), may
+  keep a copy after BUNKER clears the clipboard. Turn their history off
+  or exclude your terminal. The Windows and macOS marks were checked on
+  the project's automated test machines (that the Windows marks and the
+  macOS concealed marker are on the clipboard, and that copy, paste and
+  clear work; the macOS this-Mac-only option cannot be read back, so only
+  the request for it is tested); nobody has yet
+  confirmed by hand that a copy stays out of the Win+V list or off
+  another Apple device, and Intel Macs were not tested.
 - **Copying to the clipboard on Linux needs a clipboard tool.** Install
   `xclip`, `xsel` or `wl-clipboard` (Wayland). Without one, BUNKER says
   "Could not access the clipboard" and nothing is copied or shown; you can

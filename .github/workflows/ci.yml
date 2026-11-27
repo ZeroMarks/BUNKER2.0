@@ -36,6 +36,11 @@ jobs:
       - name: Compile every module
         run: python -m compileall -q BUNKER.py main tests
       - name: Run tests
+        # The runners' own clipboard is used for the Windows and macOS
+        # backend tests; without this they are skipped (as on a developer's
+        # machine, where they would replace what is on the clipboard).
+        env:
+          BUNKER_TEST_REAL_CLIPBOARD: "1"
         run: python -m unittest discover -s tests -t . -v
 
   audit:

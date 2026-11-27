@@ -18,6 +18,8 @@ Download the branch as a ZIP (or `git clone`) into an empty folder, then:
 - [ ] `python3 -m unittest discover -s tests -t .` passes.
 - [ ] `python3 BUNKER.py` in an 80-column terminal: it suggests *mobile*; answer **y** and confirm first-run setup works (no "UI config file" error). Then answer **n**, pick Desktop, and confirm the same.
 - [ ] Add a profile and a note; copy a password; the clipboard is empty after the timeout (on Linux you need `xclip`, `xsel` or `wl-clipboard`).
+- [ ] Windows, with clipboard history turned on (Settings > System > Clipboard): copy a password, paste it somewhere, then press Win+V. The password is not in the list. Copy ordinary text from another app and confirm that still appears there.
+- [ ] macOS, if you have a second Apple device with Universal Clipboard: copy a password and confirm it cannot be pasted on the other device. If you use a clipboard manager, confirm the password is not in its history.
 - [ ] Encrypted export, delete the profile, import: the profile is back.
 - [ ] Change the master password, log out, log in with the new one; a wrong password shows the attempt counter and leaves the files alone.
 - [ ] System info: "Look up your public IP online?" appears, and answering **n** makes no request.

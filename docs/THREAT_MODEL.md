@@ -43,7 +43,7 @@ concern for AES-GCM.
 | A1 | Someone who **copies your vault files** (stolen laptop, backup, cloud folder) | Yes | Encryption + Argon2id. They can guess passwords **offline at their own speed**; the failed-login limit does not apply to a copy. **Your master password's strength is the real defence.** |
 | A2 | Someone **at your keyboard** while BUNKER is locked | Partly | Master password. After 3 wrong passwords (counted the same way in the desktop and mobile interfaces) the desktop interface overwrites and deletes the vault; the last attempt is announced first and must be confirmed by typing `LAST`. Someone who can also change files in the BUNKER folder can reset the counter by deleting `config.cfg` (see §6). |
 | A3 | Someone at your keyboard **after you walk away unlocked** | Partly | Auto-logout (10–3600 s, or off). Passwords and notes are shown only when you ask; copied secrets leave the clipboard after 30 s and when BUNKER exits or the terminal closes. |
-| A4 | Other **apps reading the clipboard** | Partly | Clipboard clearing (above). Clipboard managers and history tools can still keep a copy; see §6. |
+| A4 | Other **apps reading the clipboard** | Partly | Clipboard clearing (above). While a secret is on the clipboard, any app running as you can read it. On Windows the copy is marked so clipboard history and cloud sync leave it out; on macOS it is marked concealed and kept on this Mac. Other clipboard managers can still keep a copy; see §6. |
 | A5 | Other **local user accounts** on the same machine | Yes | Vault, salt, settings and export files are written owner-only (0600) on macOS/Linux. |
 | A6 | **Shoulder surfing / screen recording** | Partly | Password input is hidden unless you choose to show it; secrets are revealed only on request. The password-strength checker shows what you type. |
 | A7 | **Malware running as you**, or root/admin | No | It can read memory, log keystrokes and read your files. No local password manager can defend against this. |
@@ -97,9 +97,25 @@ concern for AES-GCM.
 3. **Python can't reliably wipe memory.** Strings are immutable and may stay
    in memory until reused. Treat a machine as compromised if someone can read
    BUNKER's memory (A7).
-4. **Clipboard history.** Clipboard managers, OS history (for example
-   Windows Win+V or KDE Klipper) and remote-desktop tools may keep a copy
-   after BUNKER clears the clipboard.
+4. **Clipboard history.** Clearing the clipboard does not remove a copy
+   another program has already taken.
+   - *Windows:* BUNKER sets the three clipboard formats Windows documents
+     for this (`ExcludeClipboardContentFromMonitorProcessing`,
+     `CanIncludeInClipboardHistory` = 0, `CanUploadToCloudClipboard` = 0)
+     before the text, so Windows' own history (Win+V) and cloud clipboard
+     leave the copy out. If they cannot be set, nothing is copied.
+     Third-party clipboard managers honour them only by choice.
+   - *macOS:* the copy is limited to the current device (no Universal
+     Clipboard) and carries `org.nspasteboard.ConcealedType`. That marker
+     is a convention between apps, not something macOS enforces. If the
+     pasteboard API cannot be reached, BUNKER falls back to `pbcopy`
+     without the marks.
+   - *Linux:* no marks are set. KDE's Klipper has a password hint
+     (`x-kde-passwordManagerHint`), but the command-line clipboard tools
+     BUNKER uses there cannot attach it, so Klipper and other managers
+     may keep a copy.
+   - Remote-desktop and virtual-machine clipboard sharing may also keep
+     or forward a copy.
    BUNKER refuses to copy through KDE's Klipper command-line fallback,
    because it would put the secret in the process list; it cannot stop
    Klipper from recording what another tool copies.
@@ -139,6 +155,8 @@ python3 -m unittest discover -s tests -t .
 ```
 
 The tests cover clipboard clearing (timer, outages, races, SIGTERM),
+the Windows and macOS clipboard marks (with the system calls replaced by
+fakes, and against the real clipboard on the CI machines),
 generated secrets copied instead of printed, error
 text, export and file permissions, atomic writes, and the self-destruct
 policy (errors, EOF, Ctrl+C and timeouts keep the vault; the failed-login

@@ -6,7 +6,9 @@ Rules this module enforces for the rest of the code base:
 * Clipboard: every password or note copied to the clipboard goes through
   ``copy_secret``. The clipboard is cleared after ``CLIPBOARD_CLEAR_SECONDS``
   and again when BUNKER exits - but only if it still holds that secret, so
-  something the user copied afterwards is left alone.
+  something the user copied afterwards is left alone. On Windows and macOS
+  the copy is also marked as a secret, so the system's clipboard history and
+  device sync leave it out (``_WindowsClipboard``, ``_MacClipboard``).
 * Screen: a secret is only shown when the user explicitly asked to see it,
   and only through ``reveal_secret``. Nothing else prints secrets. A secret
   BUNKER has just generated is handed over with ``offer_secret``: clipboard

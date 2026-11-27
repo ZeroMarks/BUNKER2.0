@@ -491,7 +491,27 @@ def self_destruct():
     Refuses, and returns False, unless the vault files are one verified,
     consistent set at this moment (VAULT_FILES.destroy_allowed). In
     particular it never runs while a master password change is part-way
-    through: the ``*.prev`` copies may then be the only complete vault."""
+    through: the ``*.prev`` copies may then be the only complete vault.
+
+    Runs while holding the vault lock (VAULT_STORE.locked), so it waits for
+    a save in another BUNKER window to finish and no window can save in the
+    middle of it. If the lock cannot be had, nothing is deleted and it
+    returns False. The empty lock file itself is left in place: deleting it
+    would let two windows lock two different files. Another window that is
+    still logged in cannot write the vault back afterwards (VAULT_STORE
+    refuses a save when the file it loaded is gone)."""
+    from main import VAULT_STORE as store
+    try:
+        with store.locked():
+            return _destroy_locked()
+    except store.VaultBusy:
+        print(f"{GOLD}Self-destruct skipped: another BUNKER window is saving this vault. "
+              f"Nothing was deleted.{RESET}")
+        return False
+
+
+def _destroy_locked():
+    """The body of self_destruct; the caller holds the vault lock."""
     from main.VAULT_FILES import destroy_allowed
     if not destroy_allowed():
         print(f"{GOLD}Self-destruct skipped: the vault files are not one verified set "
@@ -512,7 +532,7 @@ def self_destruct():
         "bunker.cfg.prev",
         "bunker.salt.prev",
         ".bunker-*.tmp",  # leftovers from an interrupted atomic write
-        "Bunker.mmf.lock",  # empty lock file (VAULT_STORE.locked)
+        # Not "Bunker.mmf.lock": it is empty, and it is held right now.
     ]
     
     print(f"{GOLD}Self-destruct initiated. Searching for sensitive files...{RESET}")

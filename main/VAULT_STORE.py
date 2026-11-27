@@ -101,6 +101,18 @@ class VaultChangedElsewhere(OSError):
                                        "saved, close BUNKER and log in again")
 
 
+class VaultGone(VaultChangedElsewhere):
+    """Bunker.mmf was there when this window loaded it and is gone now (for
+    example the failed-login limit destroyed the vault in another window).
+    Writing the held copy would bring destroyed entries back, so the save is
+    refused. A subclass, so code that handles VaultChangedElsewhere handles
+    this too."""
+
+    def __init__(self):
+        OSError.__init__(self, errno.ENOENT, "the vault was removed in another BUNKER "
+                                             "window; nothing was saved, close BUNKER")
+
+
 # Errors that mean "this folder cannot lock files at all" (some network and
 # removable-storage file systems). The lock is skipped there rather than
 # making the vault read-only; commit() still checks for changes before it
@@ -342,6 +354,7 @@ class MergeReport:
         self.both_changed = 0   # fields changed in both; this window's value kept
         self.kept_edited = 0    # deleted here, edited elsewhere: kept
         self.kept_deleted = 0   # edited here, deleted elsewhere: kept
+        self.kept_private = 0   # made private elsewhere: stays private
 
     def notice(self):
         """Plain-language lines for the user; empty when nothing was merged."""
@@ -359,6 +372,10 @@ class MergeReport:
         if self.kept_deleted:
             lines.append(f"{self.kept_deleted} entry(ies) edited here had been deleted in "
                          "the other window and were kept.")
+        if self.kept_private:
+            lines.append(f"{self.kept_private} note(s) were made private in the other "
+                         "window and stay private: the tag or privacy change made here "
+                         "to them was not saved.")
         return lines
 
 
@@ -367,6 +384,7 @@ _MISSING = object()
 # by the PRIVATE marker, so one side's "private" must not be combined with
 # the other side's "tags".
 _COUPLED_FIELDS = (("private", "tags"),)
+_PRIVACY_GROUP = ("private", "tags")
 
 
 def _same(a, b, key):
@@ -389,6 +407,18 @@ def _same(a, b, key):
     return False
 
 
+def _entry_same(a, b, key):
+    """True if two versions of an entry hold the same values. A desktop edit
+    where every value was kept re-encrypts every field, so the stored
+    strings differ although nothing changed; compare those field by field."""
+    if a is b or a == b:
+        return True
+    if not (isinstance(a, dict) and isinstance(b, dict)):
+        return False
+    return all(_same(a.get(n, _MISSING), b.get(n, _MISSING), key)
+               for n in set(a) | set(b))
+
+
 def _merge_entry(base, ours, disk, key, report):
     """Field-by-field merge of one entry changed in both windows. A field
     only one side changed takes that side's value; a field both changed
@@ -403,10 +433,20 @@ def _merge_entry(base, ours, disk, key, report):
             we_changed |= {n for n in group if n in names}
         if they_changed & set(group):
             they_changed |= {n for n in group if n in names}
+    # A merge never makes a note less private: when both windows changed
+    # private/tags and only the other window's version is private, that
+    # version wins this pair (this window's wins everything else).
+    theirs_wins = set()
+    if (we_changed & they_changed & set(_PRIVACY_GROUP)
+            and disk.get("private") is True and ours.get("private") is not True):
+        theirs_wins = {n for n in _PRIVACY_GROUP if n in names}
+        report.kept_private += 1
     out = {}
     counted = set()
     for name in names:
-        if name in we_changed:
+        if name in theirs_wins:
+            value = disk.get(name, _MISSING)
+        elif name in we_changed:
             value = ours.get(name, _MISSING)
             if (name in they_changed
                     and not _same(value, disk.get(name, _MISSING), key)):
@@ -438,9 +478,9 @@ def merge(base, ours, disk, key, report=None):
         b = base.get(entry_id, _MISSING)
         o = ours.get(entry_id, _MISSING)
         d = disk.get(entry_id, _MISSING)
-        if o is b or o == b:
+        if _entry_same(o, b, key):
             value = d                      # untouched here
-        elif d is b or d == b:
+        elif _entry_same(d, b, key):
             value = o                      # untouched there
         elif o is _MISSING:
             value = d                      # deleted here, edited there
@@ -470,9 +510,12 @@ def commit(db, hashed_pass, path=DB_FILE, check=None):
     changed file does not open with this key, ``VaultChangedElsewhere`` is
     raised and nothing is written.
 
+    If the file is gone although ``db`` was loaded from it, ``VaultGone``
+    is raised and nothing is written.
+
     A plain dict (one that did not come from ``load``/``open_blob``) has no
-    record of what it was loaded from and simply replaces the file, as
-    before. ``check(blob)`` may raise to veto the write. Returns a
+    record of what it was loaded from and simply replaces (or creates) the
+    file, as before. ``check(blob)`` may raise to veto the write. Returns a
     ``MergeReport``.
     """
     report = MergeReport()
@@ -483,6 +526,10 @@ def commit(db, hashed_pass, path=DB_FILE, check=None):
         except FileNotFoundError:
             current = None
         digest = getattr(db, "_digest", None)
+        if current is None and digest is not None:
+            # It was there when db was loaded. Writing db would bring back a
+            # vault that was deliberately destroyed (self-destruct).
+            raise VaultGone()
         if current is not None and digest is not None and _digest_of(current) != digest:
             try:
                 disk = json.loads(decrypt_bytes(current, hashed_pass).decode("utf-8"))

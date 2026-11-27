@@ -128,9 +128,13 @@ a known limitation, it says so.
   window that saves after the file changed first brings in the other
   window's changes and tells you. If both changed the same field, the
   window saving last wins and says so; an entry edited in one window is
-  never deleted by the other. If the vault was re-encrypted in the other
+  never deleted by the other, and an edit that kept every value does not
+  bring back an entry the other window deleted. A note made private in
+  one window stays private. If the vault was re-encrypted in the other
   window (master password changed), the save is refused and you are asked
-  to log in again. See Known limitations for what this does not cover.
+  to log in again. If the vault was destroyed in the other window (the
+  failed-login limit), the save is refused and nothing is written back.
+  See Known limitations for what this does not cover.
 - **The notes menu shows notes added in another window.** The reload
   before "Add note" failed every time and fell back to the older copy.
 - **Mobile says what happened to an entry changed in another window.**

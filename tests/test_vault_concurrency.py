@@ -321,14 +321,15 @@ class CommitKeepsTheOtherWindowsChanges(VaultCase):
     def test_private_and_tags_travel_together(self):
         """A private note's tags are replaced by the PRIVATE marker. Taking
         "private" from one window and "tags" from the other would leave a
-        private note with readable tags."""
+        private note with readable tags. When they conflict, the private
+        side wins the pair (tests/test_vault_merge_safety.py)."""
         self.elsewhere(lambda db: db.__setitem__(
             "n1", S.update_note(db["n1"], self.key, private=True)))
         self.held["n1"] = S.update_note(self.held["n1"], self.key, tags=["work"])
         report = S.commit(self.held, self.key)
         got = S.read_note(self.on_disk()["n1"], self.key)
-        self.assertEqual((got["private"], got["tags"]), (False, ["work"]))
-        self.assertEqual(report.both_changed, 1)
+        self.assertEqual((got["private"], got["tags"]), (True, ["PRIVATE"]))
+        self.assertEqual(report.kept_private, 1)
         # ...and the other way round, with the title changed here.
         self.elsewhere(lambda db: db.__setitem__(
             "n1", S.update_note(db["n1"], self.key, private=True)))

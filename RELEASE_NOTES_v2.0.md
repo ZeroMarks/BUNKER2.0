@@ -114,8 +114,33 @@ a known limitation, it says so.
   attempt counter.
 - **Safer file writes.** The salt, config, settings and key files are
   written atomically and owner-only, so a crash mid-write can't leave a
-  truncated file that would lock you out. (Atomic writes for the vault
-  database itself are in a follow-up change.)
+  truncated file that would lock you out. The vault database is written
+  the same way, so a crash during a save leaves the previous version intact.
+- **Mobile saves to the same vault as desktop.** The mobile interface used
+  an incompatible format and its save function did not exist, so nothing
+  was ever saved. It now reads and writes `Bunker.mmf` in the desktop
+  format; you can switch interfaces without losing data.
+- **Two BUNKER windows on one vault no longer undo each other.** With the
+  same vault open twice (two terminals, or the desktop and mobile
+  interfaces), a save from one window used to replace the file with that
+  window's older copy, silently dropping what the other had saved. Saves
+  now take turns through a small lock file (`Bunker.mmf.lock`), and a
+  window that saves after the file changed first brings in the other
+  window's changes and tells you. If both changed the same field, the
+  window saving last wins and says so; an entry edited in one window is
+  never deleted by the other. If the vault was re-encrypted in the other
+  window (master password changed), the save is refused and you are asked
+  to log in again. See Known limitations for what this does not cover.
+- **The notes menu shows notes added in another window.** The reload
+  before "Add note" failed every time and fell back to the older copy.
+- **Mobile says what happened to an entry changed in another window.**
+  Editing an entry that was removed meanwhile showed "KeyError", and
+  deleting it reported success. Both now say the entry was removed or
+  changed and that nothing was done.
+- **Mobile login finishes an interrupted password change**, as the desktop
+  login does: wrong passwords are not counted while the change is
+  unfinished, and a password that opens the whole vault completes it and
+  removes the `*.prev` copies.
 - **Export files are readable only by you** (permissions 0600 on macOS and
   Linux), for both encrypted and plain-text exports. The file is written in
   full and then moved into place, so a failed export leaves an existing file
@@ -160,7 +185,8 @@ self-destruct policy, clipboard clearing (timer, outages, terminal close),
 generated secrets being copied instead of printed,
 safe error text, atomic and owner-only file writes, plain output, that the
 System info screen stays offline unless you ask for your public IP, and a
-fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
+fuzz test of damaged vault files, and two or more processes changing one
+vault at the same time. CI runs them on Linux, macOS and Windows
 with Python 3.10-3.13, plus a dependency audit. Most interactive menus are
 not covered by automated tests.
 
@@ -174,8 +200,6 @@ protection stops.
   you have a specific reason not to.
 - **The failed-login limit deletes the vault on purpose.** BUNKER cannot
   recover it. Keep an encrypted export as a backup.
-- **The mobile interface can view but not yet save changes** in this
-  release; that is fixed in a follow-up change.
 - **Deleting `config.cfg` resets the failed-attempt counter.** Someone who
   can change files in the BUNKER folder can do that (they could also just
   delete the vault).
@@ -196,6 +220,15 @@ protection stops.
 - **A generated export passphrase is on the clipboard for 30 seconds.**
   Paste it somewhere safe, or type `v` to see it, before you move on. If you
   lose it, that export cannot be opened; export again to get a new one.
+- **Two windows are kept in step when they save, not while you look.** A
+  list already on screen does not refresh when another window saves; it
+  updates the next time this window loads or saves. The lock works between
+  BUNKER windows on the same computer. It does not make it safe to open one
+  vault folder from two computers through a sync service or a network
+  share: sync tools copy files on their own schedule, and some network and
+  removable file systems cannot lock files at all (BUNKER then saves
+  without the lock). The failed-attempt counter and settings in
+  `config.cfg` are not covered by the lock.
 - **Terminal width decides the suggested interface.** BUNKER guesses
   mobile for terminals up to 80 columns and tablet up to 120, and asks you
   to confirm. Answer **n** and choose Desktop/Laptop if the guess is wrong.

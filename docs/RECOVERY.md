@@ -95,6 +95,42 @@ or its permissions changed. Close that program or fix the permissions and
 try again. BUNKER does not start a new setup in this case, so your vault is
 safe.
 
+## "Not saved: another BUNKER window is saving this vault"
+
+Two BUNKER windows have the same vault open, and the other one held the
+vault's lock for more than 10 seconds. Nothing was changed, and the change
+you just made was not kept in this window. Wait for the other window to
+finish (a master password change is the longest step), then do it again. If
+no other BUNKER window is open, another program is holding
+`Bunker.mmf.lock`; close it, or restart the computer. The lock file is
+empty and safe to leave where it is.
+
+## "Not saved: the vault was replaced in another BUNKER window and no longer opens with this login"
+
+`Bunker.mmf` changed while this window was open, and the key from this
+login cannot open the new file. The usual cause is a master password change
+in another window. BUNKER refuses to save over a vault it cannot read, so
+nothing was written. Close this window and log in again with the current
+master password, then repeat the change. If the vault does not open after
+that, see "Failed to open the vault after login" above.
+
+## "This vault was also changed in another BUNKER window"
+
+Not an error. Another window saved while this one was open, and both sets
+of changes are now in the vault and in this window. Extra lines tell you if
+anything needs a second look:
+
+- "field(s) were changed in both windows": the same field of the same entry
+  was edited in both. This window's value was saved; the other value is
+  gone. Open the entry and check it.
+- "deleted here had been edited in the other window and were NOT deleted":
+  delete them again if you still want them gone.
+- "edited here had been deleted in the other window and were kept".
+
+On the mobile interface the matching messages are "That entry was removed
+in another BUNKER window" and "That entry was changed in another BUNKER
+window after this list was shown". Nothing was changed; open the list again.
+
 ## "Vault files already exist in this folder, but Bunker.mmf could not be found"
 
 Setup refuses to create a new vault over existing ones, because that would

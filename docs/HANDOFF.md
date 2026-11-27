@@ -1,12 +1,13 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§13); judge pass (§12).
+you should not need anything else to start. Last updated 2026-11-27 (PT): `mobile/shared-vault` merged in on a stacked branch, with one-writer-at-a-time saves and the mobile login fix (§14); generated secrets are copied, not printed (§13); judge pass (§12).
 
-**Next three moves:** (1) once the waiting commits are pushed, keep CI
-green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
-(conflicts listed in §5); (2) ask for a re-check of the review fixes in
-§11; (3) work the before-tag list at the top of §7.
+**Next three moves:** (1) the maintainer reviews the stacked draft PR from
+`claude/project-thread-uc75rm` (§14), which replaces merging #2 by hand, and
+CI confirms it on Windows and macOS; (2) the before-tag items from §12: the
+IP thread that never stops, Windows clipboard history, and the setup warning
+about self-destruct; (3) ask for a re-check of §11 and §14.
 
 ## 0. Vision and mandate
 
@@ -83,6 +84,8 @@ into `main`.
 |---|---|---|---|
 | `hardening/v2.0` | [#1](https://github.com/ZeroMarks/BUNKER2.0/pull/1) (draft) | `main` | All hardening, docs, CI. It also carries `desktop-latest`. `main`'s 9 extra commits are joined by a keep-ours merge, `2bf452f`. |
 | `mobile/shared-vault` | [#2](https://github.com/ZeroMarks/BUNKER2.0/pull/2) (draft) | `hardening/v2.0` | Mobile UI on the shared vault format, plus atomic `Bunker.mmf` writes everywhere. |
+| `claude/project-thread-rbp9mm` | [#5](https://github.com/ZeroMarks/BUNKER2.0/pull/5) (draft) | `hardening/v2.0` | Review fixes, judge-pass follow-ups and generated secrets (§11-§13). |
+| `claude/project-thread-uc75rm` | draft, stacked on #5 | `claude/project-thread-rbp9mm` | #5 with `mobile/shared-vault` merged in, plus the shared-vault write safety and mobile login fix (§14). Supersedes merging #2 by hand. |
 
 Merge order: #1, then #2. Both are drafts for the maintainer's review.
 `hardening/v2.0` is merged into `mobile/shared-vault` regularly; the last
@@ -316,7 +319,7 @@ and the before-tag list in §7.
 
 The 14 waiting commits apply cleanly on `hardening/v2.0` and 142 tests pass (Linux, Python 3.13). PR #2's head passes 124. No crypto defects found.
 
-**Before merging #2:**
+**Before merging #2:** both items are done on `claude/project-thread-uc75rm` (§14).
 - Two processes saving one vault lose edits: `VAULT_STORE.modify` has no lock, and desktop saves the `db` it loaded at login. First step: a lock file around load, change and save, and a test with two interleaved `modify` calls. The note manager's "reload latest" opens `Bunker.mmf` in text mode (`DESKTOP.py`, `open("Bunker.mmf", "r")`), so it always falls back to the stale copy; change it to `"rb"`.
 - When merging, keep the interrupted-password-change handling in the mobile login (`finish_interrupted_change()` after a correct password), and keep #2's folder fsync in `SECURE_IO`.
 
@@ -379,3 +382,62 @@ Copy first, show only on request, is the common rule.
 6. A generated passphrase pasted after the 30 s clear, or left at the
    prompt until auto-logout, is gone. The export must then be made again.
    Offering the passphrase before the file is written would close this.
+
+## 14. Shared vault: one writer at a time (2026-11-27, Pacific time)
+
+Branch `claude/project-thread-uc75rm`: #5's branch with `mobile/shared-vault`
+merged in, then the two must-fix items from §12. Draft PR, stacked on #5.
+
+**Merge.** Five files conflicted. `DESKTOP.py` and `INITIALIZE.py`: both
+sides had made the same saves atomic; this branch's `write_private_bytes`,
+import rewrite and the size check before the write were kept. `MOBILE.py`:
+the login keeps the shared notices and the interrupted-change handling.
+`SECURE_IO.py` keeps #2's directory fsync (no conflict). Both sides had
+added `tests/test_atomic_vault_writes.py`; #2's version is now
+`tests/test_atomic_save_failures.py`.
+
+**Question.** How do two windows on one vault avoid losing each other's
+changes? **Ruling:** an advisory lock plus a check before every save, and a
+merge rather than a refusal when the file changed. A refusal would throw
+away the user's edit; with the merge, both windows' edits are kept.
+- `VAULT_STORE.locked()` locks `Bunker.mmf.lock` (`fcntl.flock`, or
+  `msvcrt.locking` on Windows). The lock file is never deleted: deleting it
+  would let two processes lock two different files. 10 s wait, then
+  `VaultBusy`. Re-entrant in one process. Where the file system cannot lock
+  (`ENOLCK` and similar), it saves without the lock rather than going
+  read-only.
+- `modify()` (mobile) runs load-change-save under it.
+- Loads return a `VaultDict` that remembers the file's SHA-256 and a copy of
+  the entries. `commit()` (desktop, `saveDatabase`) saves it; if the hash
+  changed it three-way merges (`merge()`), updates the in-memory copy and
+  returns a report the screen shows ("also changed in another BUNKER
+  window"). Same field changed in both: the saving window wins and says so.
+  Edited in one, deleted in the other: kept. `private` and `tags` move
+  together. A file that no longer decrypts is never overwritten
+  (`VaultChangedElsewhere`).
+- `changeMasterPassword` holds the lock from its read to its last write.
+- The note manager's reload uses `"rb"`.
+- Mobile edit, delete and favorite of an entry changed elsewhere now give a
+  plain message (also judge item S-4).
+
+**Tests.** `tests/test_vault_concurrency.py` (lock against a second
+process, a killed holder, four processes at once, merge cases, desktop
+screens, source checks), `tests/test_mobile_interrupted_change.py` (a real
+password change killed after each step, then a mobile login),
+`tests/test_mobile_stale_entries.py`. 265 pass on Linux, Python 3.13.
+Mutation checks: removing the `flock` call, reverting `"rb"`, or skipping
+the merge each fail the new tests.
+
+**Not done, in order:**
+1. Windows and macOS were not run here. CI covers them once the branch is
+   pushed; `msvcrt.locking` is the part to watch.
+2. Screens that are open do not refresh when another window saves; they
+   update on this window's next load or save.
+3. `config.cfg` (settings, failed-attempt counter) and `bunker.cfg` are not
+   under the lock. Two windows failing logins at once could each count from
+   the same number.
+4. A vault folder shared between computers through sync or a network share
+   is still unsafe (documented in RELEASE_NOTES and THREAT_MODEL §6).
+5. Desktop managers still encrypt fields themselves; moving them to the
+   `VAULT_STORE` helpers is cleanup, not safety.
+

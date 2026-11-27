@@ -1,6 +1,7 @@
 import base64, json, sys, getpass, os, gc, random, string, \
 platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
 from main.SECURE_IO import safe_error, write_private_bytes
+from main import VAULT_STORE as store
 
 from typing import Optional, Dict, Any, Tuple, Union, List
 
@@ -448,7 +449,8 @@ def overwrite_db(new_contents):
             new_contents = new_contents.encode()
             
         # Write new contents as binary
-        write_private_bytes("Bunker.mmf", new_contents)
+        with store.locked():
+            write_private_bytes("Bunker.mmf", new_contents)
             
         # Set proper permissions on Unix-like systems
         if os.name == 'posix':
@@ -1193,20 +1195,25 @@ def fileSetup(hashed_pass):
 def saveDatabase(db, hashed_pass):
     """Save database with enhanced security"""
     try:
-        db_bytes = json.dumps(db).encode('utf-8')
-        encrypted_db = vault.encrypt_data(db_bytes, hashed_pass)
-        if len(encrypted_db) < 100 and len(db) > 0:
-            raise ValueError(f"Database file too small ({len(encrypted_db)} bytes)")
-        # Atomic and owner-only: a crash or failed write leaves the old vault.
-        write_private_bytes("Bunker.mmf", encrypted_db)
-        # Only update config if it loads successfully
-        try:
-            vault.manage_config(
-                hashed_pass,
-                last_modified=str(datetime.datetime.now().timestamp())
-            )
-        except Exception as e:
-            print(f"{GOLD}Warning: Could not update config last_modified: {safe_error(e)}{RESET}")
+        def size_check(encrypted_db):
+            if len(encrypted_db) < 100 and len(db) > 0:
+                raise ValueError(f"Database file too small ({len(encrypted_db)} bytes)")
+        # One writer at a time (store.locked). The write is atomic and
+        # owner-only: a crash or failed write leaves the old vault. If
+        # another BUNKER window changed the vault since `db` was loaded,
+        # commit() merges its changes in instead of overwriting them.
+        with store.locked():
+            report = store.commit(db, hashed_pass, check=size_check)
+            # Only update config if it loads successfully
+            try:
+                vault.manage_config(
+                    hashed_pass,
+                    last_modified=str(datetime.datetime.now().timestamp())
+                )
+            except Exception as e:
+                print(f"{GOLD}Warning: Could not update config last_modified: {safe_error(e)}{RESET}")
+        for line in report.notice():
+            print(f"{GOLD}Note: {line}{RESET}")
         return True
     except Exception as e:
         print(f"{RED}** ALERT: Failed to save database: {safe_error(e)} **{RESET}")
@@ -1238,12 +1245,9 @@ def loadDatabase(hashed_pass):
         if file_size < 20:  # Even an empty encrypted database should be larger than this
             print(f"{GOLD}Database file is very small ({file_size} bytes). It may be corrupted.{RESET}")
             
-        # Decrypt the database
-        decrypted_bytes = vault.decrypt_data(encrypted_db, hashed_pass)
-        
-        # Parse the JSON data
-        db = json.loads(decrypted_bytes.decode('utf-8'))
-        return db
+        # Decrypt and parse. The result remembers what the file looked like,
+        # so a later save can tell if another window changed it meanwhile.
+        return store.open_blob(encrypted_db, hashed_pass)
             
     except Exception as e:
         print(f"{RED}** ALERT: Failed to load database: {safe_error(e)} **{RESET}")
@@ -1817,26 +1821,30 @@ def changeMasterPassword(hashed_pass, db):
                 # from the vault on disk and prepare everything in memory;
                 # nothing is written if any step fails.
                 from main.VAULT_FILES import rekey_database, replace_vault
-                current_db = loadDatabase(hashed_pass)
-                new_db = rekey_database(current_db, hashed_pass, new_derived_key, vault)
-                encrypted_db = vault.encrypt_data(json.dumps(new_db).encode(), new_derived_key)
-                encrypted_config = vault.encrypt_data(json.dumps(config).encode(), new_derived_key)
-                # Prove the new files open with the new key before writing.
-                if json.loads(vault.decrypt_data(encrypted_db, new_derived_key)) != new_db:
-                    raise ValueError("re-encrypted vault did not verify")
+                # The vault lock is held from the read to the last write, so
+                # another BUNKER window cannot save in between and have its
+                # change lost (or written under the old key).
+                with store.locked():
+                    current_db = loadDatabase(hashed_pass)
+                    new_db = rekey_database(current_db, hashed_pass, new_derived_key, vault)
+                    encrypted_db = vault.encrypt_data(json.dumps(new_db).encode(), new_derived_key)
+                    encrypted_config = vault.encrypt_data(json.dumps(config).encode(), new_derived_key)
+                    # Prove the new files open with the new key before writing.
+                    if json.loads(vault.decrypt_data(encrypted_db, new_derived_key)) != new_db:
+                        raise ValueError("re-encrypted vault did not verify")
 
-                ui_config = {
-                    "attempts": 0,
-                    "max_attempts": ui_config.get("max_attempts", 3),
-                    "disable_ipv4": ui_config.get("disable_ipv4", True),
-                    "current_timeout": ui_config.get("current_timeout", 60),
-                }
-                # Database, config and salt are replaced together, with the
-                # old files kept until all succeed (VAULT_FILES.replace_vault).
-                # UI settings are re-saved right after the salt: their key
-                # depends on it.
-                replace_vault(new_salt, encrypted_config, encrypted_db,
-                              after_salt=lambda: save_ui_config(ui_config))
+                    ui_config = {
+                        "attempts": 0,
+                        "max_attempts": ui_config.get("max_attempts", 3),
+                        "disable_ipv4": ui_config.get("disable_ipv4", True),
+                        "current_timeout": ui_config.get("current_timeout", 60),
+                    }
+                    # Database, config and salt are replaced together, with the
+                    # old files kept until all succeed (VAULT_FILES.replace_vault).
+                    # UI settings are re-saved right after the salt: their key
+                    # depends on it.
+                    replace_vault(new_salt, encrypted_config, encrypted_db,
+                                  after_salt=lambda: save_ui_config(ui_config))
 
                 print(f"{GREEN}\n ** SUCCESS: Master password changed successfully! Log in again to access the note manager. **{RESET}")
                 timeoutInput(f"\n{GOLD}Press 'enter' to logout...{RESET}")
@@ -2080,10 +2088,7 @@ def cleanupDatabase(hashed_pass, db):
     if cleaned:
         try:
             # Use enhanced security for encryption
-            encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-            
-            # Write directly as bytes to ensure consistent format
-            write_private_bytes("Bunker.mmf", encrypted_db)
+            store.commit(db, hashed_pass)
                 
             print(f"\n{GREEN}** Database cleaned up: Removed {len(invalid_entries)} invalid entries **{RESET}")
             if profile_count > 0:

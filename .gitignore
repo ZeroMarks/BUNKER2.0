@@ -18,6 +18,8 @@ config.cfg
 bunker.chk
 *.prev
 *.bak.*
+# Empty lock file BUNKER keeps next to the vault so two windows take turns saving.
+Bunker.mmf.lock
 # Leftovers from an interrupted save or setup.
 .bunker-*.tmp
 .bunker-setup-in-progress

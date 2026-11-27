@@ -9,7 +9,8 @@ from main.VAULT_FILES import (integrity_status, record_integrity, attempts_notic
 from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_export,
     unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
     existing_profiles, plan_notes, plan_profiles, has_controls, printable)
-from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, offer_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS, write_private_bytes
+from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, offer_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS
+from main import VAULT_STORE as store
 from main.INITIALIZE import  (vaultSetup, display_user_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
@@ -28,6 +29,43 @@ start_ip_fetch_thread, stop_ip_fetch_thread, self_destruct, safe_exit, spinning_
 displayHeader, displaySection, get_uptime, check_vpn, combined_tips,
 get_external_ip, local_ipv4, check_password_strength, to_clipboard,get_network_connections,
 format_connections,get_network_interfaces, display_network_summary)
+
+# VAULT ON DISK
+# The managers keep the decrypted vault in memory (``db``) while their menu is
+# open. Another BUNKER window (or the mobile interface) may save the same
+# vault in the meantime, so every load and save goes through these two.
+
+def _open_vault(blob, hashed_pass):
+    """Decrypt the bytes of Bunker.mmf into the dict the managers work on. It
+    remembers what the file looked like, so _save_vault can tell if the file
+    changed afterwards."""
+    if isinstance(blob, str):
+        blob = blob.encode()
+    return store.open_blob(blob, hashed_pass)
+
+
+def _save_vault(db, hashed_pass):
+    """Save the in-memory vault. If another window changed Bunker.mmf since
+    ``db`` was loaded, its changes are merged in first (``db`` is updated in
+    place) and the user is told. If the vault is locked by another window
+    for too long, or no longer opens with this login, nothing is written,
+    the change is taken back out of ``db``, the user is told and the error
+    is raised so the caller does not report success."""
+    try:
+        report = store.commit(db, hashed_pass)
+    except (store.VaultBusy, store.VaultChangedElsewhere) as e:
+        store.revert(db)
+        print(f"\n{RED}** ALERT: Not saved: {e.strerror}. **{RESET}")
+        timeoutInput(f"{GOLD}Press 'enter' to continue...{RESET}")
+        raise
+    lines = report.notice()
+    if lines:
+        print()
+        for line in lines:
+            print(f"{GOLD}Note: {line}{RESET}")
+        timeoutInput(f"{GOLD}Press 'enter' to continue...{RESET}")
+    return report
+
 
 # LOGIN / SETUP
 def main(device_type='desktop'):
@@ -363,8 +401,7 @@ def manage_passwords_and_notes(hashed_pass):
             # Ensure contents is in bytes format for consistent decryption
             with open("Bunker.mmf", "rb") as f:
                 db_bytes = f.read()
-            decrypted_data = vault.decrypt_data(db_bytes, hashed_pass)
-            db = json.loads(decrypted_data.decode("utf-8"))
+            db = _open_vault(db_bytes, hashed_pass)
             
         except json.JSONDecodeError:
             raise ValueError("Database format is invalid")
@@ -465,8 +502,7 @@ def manage_passwords_and_notes(hashed_pass):
                     with open("Bunker.mmf", "rb") as f:
                         contents = f.read()
                     # Update the db variable with the latest data
-                    decrypted_data = vault.decrypt_data(contents, hashed_pass)
-                    db = json.loads(decrypted_data.decode("utf-8"))
+                    db = _open_vault(contents, hashed_pass)
                 except Exception as e:
                     print(f"{RED}** ALERT: Failed to refresh database: {safe_error(e)} **{RESET}")
                     input(f"{GOLD}Press ENTER to continue...{RESET}")
@@ -1150,8 +1186,7 @@ def main_pwd_manager(hashed_pass, contents):
             if isinstance(contents, str):
                 contents = contents.encode()
                 
-            decrypted_data = vault.decrypt_data(contents, hashed_pass)
-            db = json.loads(decrypted_data.decode("utf-8"))
+            db = _open_vault(contents, hashed_pass)
         except Exception as e:
             raise ValueError(f"Failed to decrypt database: {safe_error(e)}")
         
@@ -1372,8 +1407,7 @@ def addProfile(hashed_pass, db):
                     "password": encrypted_password,
                     "favorite": profile_data.get('favorite', False),
                 }
-                encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                write_private_bytes("Bunker.mmf", encrypted_db)
+                _save_vault(db, hashed_pass)
                 clear_screen()
                 displayHeader(f"{CYAN}✏️  ADD PROFILE{RESET}")
                 print(f"{GREEN}** SUCCESS: Profile successfully created! **{RESET}")
@@ -1422,8 +1456,7 @@ def displayFavorites(hashed_pass, db):
         # Ensure db is properly loaded as a dictionary
         if isinstance(db, bytes):
             try:
-                decrypted_data = vault.decrypt_data(db, hashed_pass)
-                db = json.loads(decrypted_data.decode("utf-8"))
+                db = _open_vault(db, hashed_pass)
             except Exception as e:
                 print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
@@ -1801,8 +1834,7 @@ def editProfileData(hashed_pass, db):
                 }
 
                 # Save encrypted database with enhanced security
-                encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                write_private_bytes("Bunker.mmf", encrypted_db)
+                _save_vault(db, hashed_pass)
                 
                 clear_screen()
                 displayHeader(f"{CYAN}🖍️  EDIT A PROFILE{RESET}")
@@ -2000,8 +2032,7 @@ def deleteProfileData(hashed_pass, db):
                 
             # Save changes to the database with enhanced security
             try:
-                encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                write_private_bytes("Bunker.mmf", encrypted_db)
+                _save_vault(db, hashed_pass)
             except Exception as e:
                 print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
 
@@ -2209,8 +2240,7 @@ def tagProfiles(hashed_pass, db):
         # Ensure db is properly loaded as a dictionary
         if isinstance(db, bytes):
             try:
-                decrypted_data = vault.decrypt_data(db, hashed_pass)
-                db = json.loads(decrypted_data.decode("utf-8"))
+                db = _open_vault(db, hashed_pass)
             except Exception as e:
                 print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
@@ -2567,8 +2597,7 @@ def main_note_manager(hashed_pass, contents):
             if isinstance(contents, str):
                 contents = contents.encode()
                 
-            decrypted_data = vault.decrypt_data(contents, hashed_pass)
-            db = json.loads(decrypted_data.decode("utf-8"))
+            db = _open_vault(contents, hashed_pass)
         except Exception as e:
             raise ValueError(f"Failed to decrypt database: {safe_error(e)}")
         
@@ -2608,14 +2637,13 @@ def main_note_manager(hashed_pass, contents):
                 if user_cmd == "a":
                     # Get the latest database contents before calling addNote
                     try:
-                        with open("Bunker.mmf", "r") as f:
-                            latest_contents = f.read()
-                        if latest_contents:
-                            latest_contents_bytes = latest_contents.encode()
-                            decrypted_latest = vault.decrypt_data(latest_contents_bytes, hashed_pass)
-                            db = json.loads(decrypted_latest.decode("utf-8"))
+                        # Binary mode: the vault is not text. (Text mode made
+                        # this read fail every time, so the stale copy was used.)
+                        with open("Bunker.mmf", "rb") as f:
+                            db = _open_vault(f.read(), hashed_pass)
                     except Exception:
-                        # If we can't get the latest, use what we have
+                        # Keep the copy we have. Saving it is still safe:
+                        # _save_vault merges in what another window changed.
                         pass
                         
                     timedOut = addNote(hashed_pass, db)
@@ -2623,10 +2651,7 @@ def main_note_manager(hashed_pass, contents):
                     # Save changes after operation
                     if not timedOut:
                         try:
-                            encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            write_private_bytes("Bunker.mmf", encrypted_db)
-                            # Update contents for future operations
-                            contents = encrypted_db
+                            _save_vault(db, hashed_pass)
                         except Exception as e:
                             print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
@@ -2639,10 +2664,7 @@ def main_note_manager(hashed_pass, contents):
                     # Save changes after operation
                     if not timedOut:
                         try:
-                            encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            write_private_bytes("Bunker.mmf", encrypted_db)
-                            # Update contents for future operations
-                            contents = encrypted_db
+                            _save_vault(db, hashed_pass)
                         except Exception as e:
                             print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
@@ -2661,10 +2683,7 @@ def main_note_manager(hashed_pass, contents):
                     # Save changes after operation
                     if not timedOut:
                         try:
-                            encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                            write_private_bytes("Bunker.mmf", encrypted_db)
-                            # Update contents for future operations
-                            contents = encrypted_db
+                            _save_vault(db, hashed_pass)
                         except Exception as e:
                             print(f"{RED}** ALERT: Failed to save changes: {safe_error(e)} **{RESET}")
                             input(f"{GOLD}Press ENTER to continue...{RESET}")
@@ -2802,8 +2821,7 @@ def addNote(hashed_pass, db):
                     "favorite": is_favorite,
                     "private": is_private
                 }
-                encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                write_private_bytes("Bunker.mmf", encrypted_db)
+                _save_vault(db, hashed_pass)
                 clear_screen()
                 displayHeader(f"{CYAN}📝 ADD A NOTE{RESET}")
                 print(f"{GREEN}** SUCCESS: Note successfully created! **{RESET}")
@@ -2862,8 +2880,7 @@ def displayFavoriteNotes(hashed_pass, db):
         # Ensure db is properly loaded as a dictionary
         if isinstance(db, bytes):
             try:
-                decrypted_data = vault.decrypt_data(db, hashed_pass)
-                db = json.loads(decrypted_data.decode("utf-8"))
+                db = _open_vault(db, hashed_pass)
             except Exception as e:
                 print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                 return False
@@ -3254,10 +3271,7 @@ def editNoteData(hashed_pass, db):
                     }
 
                     # Save updated database with enhanced security
-                    encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                    
-                    # Write directly as bytes to ensure consistent format
-                    write_private_bytes("Bunker.mmf", encrypted_db)
+                    _save_vault(db, hashed_pass)
 
                     # Success message
                     clear_screen()
@@ -3967,14 +3981,13 @@ def _report_import_plan(kind, new_count, duplicates, star_only, problems, contro
 def _finish_import(db, new_entries, hashed_pass, kind):
     """Save the vault with the new entries added. The in-memory vault changes
     only if the save succeeds, so a failed save leaves both copies as they were."""
-    updated = dict(db)
+    updated = store.fork(db)
     for entry in new_entries:
         updated[str(uuid.uuid4())] = entry
     if not saveDatabase(updated, hashed_pass):
         print(f"{RED}** ALERT: The vault could not be saved. Nothing was imported. **{RESET}")
         return timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}") == timeoutGlobalCode
-    db.clear()
-    db.update(updated)
+    store.adopt(db, updated)
     print(f"\n{GREEN}** SUCCESS: Import completed. **{RESET}")
     print(f"{GOLD}{kind.capitalize()} imported: {len(new_entries)}{RESET}")
     userContinue = timeoutInput(f"\n{GOLD}Press 'enter' to return to menu...{RESET}")
@@ -4550,8 +4563,7 @@ def tagNotes(hashed_pass, db):
             # Ensure db is properly loaded as a dictionary
             if isinstance(db, bytes):
                 try:
-                    decrypted_data = vault.decrypt_data(db, hashed_pass)
-                    db = json.loads(decrypted_data.decode("utf-8"))
+                    db = _open_vault(db, hashed_pass)
                 except Exception as e:
                     print(f"{RED} ** ALERT: Error loading database: {safe_error(e)} **{RESET}")
                     return False
@@ -4939,8 +4951,7 @@ def deleteNoteData(hashed_pass, db):
             
             try:
                 # Use enhanced security for encryption and save as binary
-                encrypted_db = vault.encrypt_data(json.dumps(db).encode(), hashed_pass)
-                write_private_bytes("Bunker.mmf", encrypted_db)
+                _save_vault(db, hashed_pass)
             except Exception as e:
                 print(f"{RED} ** ALERT: Failed to update database. Error: {safe_error(e)} **{RESET}")
             

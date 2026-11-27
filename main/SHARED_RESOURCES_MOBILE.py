@@ -1,5 +1,6 @@
 import os, platform
 from main.SECURE_IO import safe_error, write_private_bytes
+from main.VAULT_STORE import write_bytes_atomic
 import importlib.util
 import time
 import sys

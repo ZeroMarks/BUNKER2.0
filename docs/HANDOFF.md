@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-27 (PT): `mobile/shared-vault` merged in on a stacked branch, with one-writer-at-a-time saves and the mobile login fix (§14); generated secrets are copied, not printed (§13); judge pass (§12).
+you should not need anything else to start. Last updated 2026-11-27 (PT): review follow-ups to the shared-vault lock on a branch stacked on it (§15); `mobile/shared-vault` merged in on a stacked branch, with one-writer-at-a-time saves and the mobile login fix (§14); generated secrets are copied, not printed (§13); judge pass (§12).
 
 **Next three moves:** (1) the maintainer reviews the stacked draft PR from
 `claude/project-thread-uc75rm` (§14), which replaces merging #2 by hand, and
@@ -211,6 +211,9 @@ python3 BUNKER.py   # interactive; needs a real terminal
 5. Where should the README live? `Read Me/README.md` isn't shown on the repo page, and `main/README.md` duplicates it. A README redesign draft exists outside the repo and has not been committed.
 6. Review and merge #1, then #2. Then tag v2.0 and publish the release.
 8. Should copy become the default at the view prompts (§13, recommendation: yes)?
+9. Same field changed in two windows (§15): keep the losing value as a
+   separate "conflict copy" entry instead of dropping it? Recommendation:
+   yes, for `password` and `content` only.
 7. Community files (issue forms, `SUPPORT.md`, `SECURITY.md`, `CONTRIBUTING.md` under `.github/`) are prepared on local branch `community/issue-templates` (off `main`, new files only; merge after #1 so their doc links resolve). Recommendation: accept issues only, no outside code PRs while the licence forbids modification. When private vulnerability reporting is on, point `SECURITY.md` at GitHub's "Report a vulnerability" button.
 
 ## 7. Next, ranked (each with its first step)
@@ -441,3 +444,50 @@ the merge each fail the new tests.
 5. Desktop managers still encrypt fields themselves; moving them to the
    `VAULT_STORE` helpers is cleanup, not safety.
 
+## 15. Shared vault review follow-ups (2026-11-27, Pacific time)
+
+Stacked on §14's branch. Each item has a test written first that failed
+on the old code (`tests/test_vault_merge_safety.py`).
+
+- **A save never writes back a vault that was removed.** `commit()` raises
+  `VaultGone` (a `VaultChangedElsewhere`, so the desktop handler already
+  reverts and reports it) when `db` was loaded from a file that no longer
+  exists. Before, a window still logged in after self-destruct in another
+  window wrote `Bunker.mmf` again, with no salt to open it and setup
+  refusing to run over it. A plain dict (first save) still creates the file.
+- **Self-destruct holds the vault lock** for the integrity check and every
+  deletion, so it waits for a save in progress and nothing saves in the
+  middle. If the lock is busy past `LOCK_TIMEOUT`, nothing is deleted and
+  it returns False (the caller then exits as for unverified files). The
+  lock file is no longer on its delete list: it is empty and held at that
+  moment, and deleting it would let two processes lock different files.
+- **A merge never lowers privacy.** When both windows changed `private`/
+  `tags` and only the other window's version is private, that pair comes
+  from the other window; `MergeReport.kept_private` counts it and the
+  notice says the tag or privacy change made here was not saved.
+  `test_private_and_tags_travel_together` was updated to this rule.
+- **An edit that kept every value is not an edit.** The entry-level
+  "untouched" check in `merge()` compares decrypted values
+  (`_entry_same`), so a desktop edit with Enter on every field no longer
+  brings back an entry the other window deleted (and a re-save there no
+  longer blocks a delete here).
+- **Windows: replace retries while a reader has the file open.**
+  `SECURE_IO._replace` retries `os.replace` on `PermissionError` 8 times,
+  starting at 10 ms and doubling (about 1.3 s), on Windows only. Safe to
+  repeat: the temp file is untouched until the replace succeeds, and on
+  the last failure it is removed and the error raised as before. A
+  Windows-only test opens `Bunker.mmf` in a second process for 0.3 s and
+  saves; it runs on the Windows CI runners.
+
+**Open, the maintainer's call (§6.9).** When both windows change the same
+password (or note content), the saving window wins and the other value is
+gone; in a password manager that value may already be set on the website.
+Recommendation: keep this window's entry and add the other side's version
+as a new entry with " (conflict copy)" appended to its domain or title,
+and name it in the notice. Cost: about an hour with tests. It adds visible
+entries, which is why it waits for a ruling.
+
+**Not done:** the merge notice still counts fields without naming the
+entry; `locked()` waits forever for a second thread in the same process
+(no thread saves today); mobile login's `finish_interrupted_change` runs
+without the lock; `INITIALIZE.overwrite_db` (unused) writes outside it.

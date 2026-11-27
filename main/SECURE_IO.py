@@ -28,6 +28,7 @@ import hmac
 import os
 import sys
 import threading
+import time
 
 def _clipboard_seconds(default=30, low=5, high=300):
     """Clipboard clear delay. Set BUNKER_CLIPBOARD_SECONDS to change it
@@ -276,6 +277,29 @@ def safe_error(exc):
     return name
 
 
+# Windows refuses to replace a file while another process has it open
+# (Python's open() there does not share delete access), and the vault is
+# read without the lock. A reader holds it only for one read of a small
+# file, so a refused replace is retried for about a second before the save
+# fails. Elsewhere a replace never waits on readers, so it is not retried.
+_RETRY_REPLACE = os.name == "nt"
+_REPLACE_TRIES = 8
+_REPLACE_FIRST_WAIT = 0.01   # seconds; doubles each try (about 1.3 s in all)
+
+
+def _replace(tmp, path):
+    """os.replace, retried briefly on Windows while the target is open."""
+    wait = _REPLACE_FIRST_WAIT
+    for attempt in range(_REPLACE_TRIES if _RETRY_REPLACE else 1):
+        try:
+            return os.replace(tmp, path)
+        except PermissionError:
+            if not _RETRY_REPLACE or attempt == _REPLACE_TRIES - 1:
+                raise
+            time.sleep(wait)
+            wait *= 2
+
+
 @contextlib.contextmanager
 def _atomic_private(path, mode, encoding=None):
     """Yield a file that atomically replaces ``path`` on success (mode 0600).
@@ -294,7 +318,7 @@ def _atomic_private(path, mode, encoding=None):
             yield f
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
         try:
             os.remove(tmp)

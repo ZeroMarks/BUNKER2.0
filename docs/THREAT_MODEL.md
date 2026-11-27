@@ -80,8 +80,11 @@ concern for AES-GCM.
   open; before saving it compares the file's SHA-256 with the one it
   loaded, and if the file changed it merges the other window's entries and
   fields into its copy instead of overwriting them. A file that no longer
-  decrypts with the session key is never overwritten. A master password
-  change holds the lock from its read to its last write.
+  decrypts with the session key is never overwritten, and a file that has
+  disappeared since it was loaded (self-destruct in another window) is not
+  written back. A merge never makes a private note readable. Self-destruct
+  holds the lock while it deletes, and leaves the empty lock file. A master
+  password change holds the lock from its read to its last write.
   `tests/test_vault_concurrency.py` runs several real processes against one
   vault.
 - **Vault data never leaves the machine.** BUNKER makes no network request
@@ -151,7 +154,11 @@ concern for AES-GCM.
    without it (the desktop interface still checks whether the file changed
    before it writes). Another program that writes `Bunker.mmf` ignores the
    lock. When two windows change the same field of the same entry, the one
-   that saves last wins and says so; the other value is not kept anywhere.
+   that saves last wins and says so; the other value is not kept anywhere
+   (for a password, that can be one already set on the website). The
+   exception is a note's privacy: if either window made it private, it
+   stays private. On Windows a save waits up to about a second for another
+   window that is reading the vault at that moment, then fails safely.
    `config.cfg` (settings and the failed-attempt counter) and `bunker.cfg`
    are not covered by the lock.
 

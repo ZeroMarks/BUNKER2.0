@@ -55,7 +55,7 @@ class FailureLeavesOldVault(unittest.TestCase):
 
     def assertOldIntact(self):
         self.assertEqual(Path("Bunker.mmf").read_bytes(), self.old)
-        self.assertEqual(os.listdir("."), ["Bunker.mmf"])
+        self.assertEqual([n for n in os.listdir(".") if n != "Bunker.mmf.lock"], ["Bunker.mmf"])
 
     def test_saveDatabase_failure_during_write(self):
         with mock.patch("os.fsync", side_effect=OSError("disk full")):
@@ -79,7 +79,7 @@ class FailureLeavesOldVault(unittest.TestCase):
             self.assertFalse(self._quiet(I.overwrite_db, b"new-bytes"))
         self.assertEqual(Path("Bunker.mmf").read_bytes(), self.old)
         # the helper's temp file is gone; only the vault and its backup remain
-        extras = [n for n in os.listdir(".") if n != "Bunker.mmf"]
+        extras = [n for n in os.listdir(".") if n not in ("Bunker.mmf", "Bunker.mmf.lock")]
         self.assertTrue(all(n.startswith("Bunker.mmf.bak.") for n in extras), extras)
 
     def test_overwrite_db_success_writes_exact_bytes(self):

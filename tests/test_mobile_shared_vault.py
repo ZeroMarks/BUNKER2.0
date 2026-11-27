@@ -298,7 +298,7 @@ class ForeignEntriesAndFailures(MobileCase):
         self.assertIn("RuntimeError", out)
         self.assertNotIn("hunter2", out)
         self.assertEqual(Path("Bunker.mmf").read_bytes(), before)
-        self.assertEqual(sorted(os.listdir(".")), ["Bunker.mmf"])
+        self.assertEqual(sorted(n for n in os.listdir(".") if n != "Bunker.mmf.lock"), ["Bunker.mmf"])
 
     def test_wrong_key_load_error_never_removes_files(self):
         self.seed(self.foreign_db())

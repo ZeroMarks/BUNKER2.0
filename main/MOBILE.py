@@ -389,11 +389,37 @@ def _split_tags(raw):
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+class _ChangedElsewhere(Exception):
+    """The entry picked from the list is no longer what the list showed:
+    another BUNKER window changed or removed it in the meantime. The text
+    is BUNKER's own (never vault data), so it is shown as it is."""
+
+
+GONE = ("That entry was removed in another BUNKER window. Nothing was changed. "
+        "Open the list again.")
+CHANGED = ("That entry was changed in another BUNKER window after this list was shown. "
+           "Nothing was deleted. Open the list again to see it as it is now.")
+
+
+def _still_there(db, entry_id, shown=None):
+    """Inside store.modify: the entry to change, as it is in the vault right
+    now. Raises if it is gone, or (when ``shown`` is given) if it is no
+    longer the entry the user was looking at."""
+    if entry_id not in db:
+        raise _ChangedElsewhere(GONE)
+    if shown is not None and db[entry_id] != shown:
+        raise _ChangedElsewhere(CHANGED)
+    return db[entry_id]
+
+
 def _run(ui, action, ok_message=None):
     """Run one action; report failure by class name only. Never deletes or
     wipes anything: a failed save leaves Bunker.mmf as it was."""
     try:
         result = action()
+    except _ChangedElsewhere as e:
+        ui.error_message(str(e))
+        return False
     except Exception as e:
         ui.error_message(f"Could not complete that: {safe_error(e)}")
         return False
@@ -459,8 +485,11 @@ def mobile_note_manager(hashed_pass, device_type='mobile'):
             fields["title"] = title
         if _yes_no(ui, "Replace the content? (y/n, Enter = no)", default=False):
             fields["content"] = _read_multiline(ui)
+        # Only what the user actually changed is written, so a change made
+        # to the other fields in another window meanwhile is kept.
         private = _yes_no(ui, f"Private? (y/n, Enter = keep {'y' if cur['private'] else 'n'})", default=cur["private"])
-        fields["private"] = private
+        if private != cur["private"]:
+            fields["private"] = private
         if not private:
             raw = ui.input_prompt("New tags, comma separated (or Enter to keep current)")
             if raw.strip():
@@ -469,12 +498,12 @@ def mobile_note_manager(hashed_pass, device_type='mobile'):
                 fields["tags"] = []  # leaving private: PRIVATE tag no longer applies
             else:
                 fields.pop("tags", None)
-        fields["favorite"] = _yes_no(ui, f"Favorite? (y/n, Enter = keep {'y' if cur['favorite'] else 'n'})", default=cur["favorite"])
+        favorite = _yes_no(ui, f"Favorite? (y/n, Enter = keep {'y' if cur['favorite'] else 'n'})", default=cur["favorite"])
+        if favorite != cur["favorite"]:
+            fields["favorite"] = favorite
 
         def apply(db):
-            if note_id not in db:
-                raise KeyError(note_id)
-            db[note_id] = store.update_note(db[note_id], hashed_pass, **fields)
+            db[note_id] = store.update_note(_still_there(db, note_id), hashed_pass, **fields)
         store.modify(hashed_pass, apply)
         ui.success_message("Note updated successfully")
 
@@ -482,10 +511,14 @@ def mobile_note_manager(hashed_pass, device_type='mobile'):
         picked = pick_note("Enter note number to delete")
         if not picked:
             return
-        note_id, _ = picked
+        note_id, shown = picked
         if not ui.confirmation_prompt("Are you sure you want to delete this note?"):
             return
-        store.modify(hashed_pass, lambda db: db.pop(note_id, None))
+
+        def apply(db):
+            _still_there(db, note_id, shown)
+            del db[note_id]
+        store.modify(hashed_pass, apply)
         ui.success_message("Note deleted successfully")
 
     actions = {'1': view_note, '2': add_note, '3': edit_note, '4': delete_note}
@@ -566,9 +599,7 @@ def mobile_password_manager(hashed_pass, device_type='mobile'):
             fields["password"] = password
 
         def apply(db):
-            if pid not in db:
-                raise KeyError(pid)
-            db[pid] = store.update_profile(db[pid], hashed_pass, **fields)
+            db[pid] = store.update_profile(_still_there(db, pid), hashed_pass, **fields)
         store.modify(hashed_pass, apply)
         ui.success_message("Password updated successfully")
 
@@ -576,10 +607,14 @@ def mobile_password_manager(hashed_pass, device_type='mobile'):
         picked = pick_profile("Enter password number to delete", "Delete Password")
         if not picked:
             return
-        pid, _ = picked
+        pid, shown = picked
         if not ui.confirmation_prompt("Are you sure you want to delete this password?"):
             return
-        store.modify(hashed_pass, lambda db: db.pop(pid, None))
+
+        def apply(db):
+            _still_there(db, pid, shown)
+            del db[pid]
+        store.modify(hashed_pass, apply)
         ui.success_message("Password deleted successfully")
 
     def copy_password():
@@ -669,9 +704,7 @@ def mobile_profile_manager(hashed_pass, device_type='mobile'):
                   (("domain", site), ("username", username), ("email", email)) if v.strip()}
 
         def apply(db):
-            if pid not in db:
-                raise KeyError(pid)
-            db[pid] = store.update_profile(db[pid], hashed_pass, **fields)
+            db[pid] = store.update_profile(_still_there(db, pid), hashed_pass, **fields)
         store.modify(hashed_pass, apply)
         ui.success_message("Profile updated successfully")
 
@@ -679,14 +712,15 @@ def mobile_profile_manager(hashed_pass, device_type='mobile'):
         picked = pick_profile("Enter profile number to star/unstar", "Favorites")
         if not picked:
             return
-        pid, entry = picked
-        now = not bool(entry.get("favorite", False))
+        pid, _ = picked
 
         def apply(db):
-            if pid not in db:
-                raise KeyError(pid)
-            db[pid] = store.update_profile(db[pid], hashed_pass, favorite=now)
-        store.modify(hashed_pass, apply)
+            # Flip what is in the vault now, not what the list showed.
+            current = _still_there(db, pid)
+            now = not bool(current.get("favorite", False))
+            db[pid] = store.update_profile(current, hashed_pass, favorite=now)
+            return now
+        now = store.modify(hashed_pass, apply)
         ui.success_message("Added to favorites" if now else "Removed from favorites")
 
     actions = {'1': view_profile, '2': add_profile, '3': edit_profile, '4': toggle_favorite}

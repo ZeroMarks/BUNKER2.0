@@ -109,7 +109,7 @@ class SaveBehaviour(StoreCase):
         mode = stat.S_IMODE(os.stat("Bunker.mmf").st_mode)
         if os.name != "nt":  # POSIX permissions only
             self.assertEqual(mode, 0o600)
-        self.assertEqual(os.listdir("."), ["Bunker.mmf"])
+        self.assertEqual([n for n in os.listdir(".") if n != "Bunker.mmf.lock"], ["Bunker.mmf"])
 
     def test_resave_over_existing_file_stays_0600(self):
         Path("Bunker.mmf").write_bytes(b"old")
@@ -125,7 +125,7 @@ class SaveBehaviour(StoreCase):
             with self.assertRaises(OSError):
                 S.save({}, self.key)
         self.assertEqual(Path("Bunker.mmf").read_bytes(), before)
-        self.assertEqual(os.listdir("."), ["Bunker.mmf"])
+        self.assertEqual([n for n in os.listdir(".") if n != "Bunker.mmf.lock"], ["Bunker.mmf"])
 
     def test_failure_during_replace_keeps_previous_file_identical(self):
         S.save({S.new_id(): S.make_note("t", "c", self.key)}, self.key)
@@ -134,7 +134,7 @@ class SaveBehaviour(StoreCase):
             with self.assertRaises(OSError):
                 S.save({}, self.key)
         self.assertEqual(Path("Bunker.mmf").read_bytes(), before)
-        self.assertEqual(os.listdir("."), ["Bunker.mmf"])
+        self.assertEqual([n for n in os.listdir(".") if n != "Bunker.mmf.lock"], ["Bunker.mmf"])
 
     def test_failure_while_writing_keeps_previous_file_identical(self):
         S.save({S.new_id(): S.make_note("t", "c", self.key)}, self.key)

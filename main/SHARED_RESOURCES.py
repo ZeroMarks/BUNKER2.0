@@ -512,6 +512,7 @@ def self_destruct():
         "bunker.cfg.prev",
         "bunker.salt.prev",
         ".bunker-*.tmp",  # leftovers from an interrupted atomic write
+        "Bunker.mmf.lock",  # empty lock file (VAULT_STORE.locked)
     ]
     
     print(f"{GOLD}Self-destruct initiated. Searching for sensitive files...{RESET}")

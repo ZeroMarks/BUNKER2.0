@@ -72,6 +72,18 @@ concern for AES-GCM.
   all files together, keeping the old ones until every write succeeded.
 - **Atomic, private writes** (0600 temp file, fsync, rename, directory
   fsync) for the vault database, salt, config, settings, key and export files.
+- **One writer at a time.** Every change to `Bunker.mmf` is made while
+  holding an exclusive lock on `Bunker.mmf.lock` (`fcntl.flock`, or
+  `msvcrt.locking` on Windows), which the operating system releases if
+  BUNKER dies. The mobile interface reloads the vault under that lock for
+  each change. The desktop interface keeps a copy in memory while a menu is
+  open; before saving it compares the file's SHA-256 with the one it
+  loaded, and if the file changed it merges the other window's entries and
+  fields into its copy instead of overwriting them. A file that no longer
+  decrypts with the session key is never overwritten. A master password
+  change holds the lock from its read to its last write.
+  `tests/test_vault_concurrency.py` runs several real processes against one
+  vault.
 - **Vault data never leaves the machine.** BUNKER makes no network request
   unless you ask it to look up your public IP, in one of two places:
   - the IP display (off by default): once turned on, it checks connectivity
@@ -131,6 +143,17 @@ concern for AES-GCM.
     to see is printed to your terminal. BUNKER clears the screen on the next
     menu, but terminal scrollback, a screen recording, a screen share or
     someone behind you can still capture it. Copying is the safer default.
+
+12. **The vault lock is local and cooperative.** It stops two BUNKER
+   processes on one computer from saving over each other. It does not
+   protect a vault folder shared between computers by a sync service or a
+   network share, and on file systems that cannot lock files BUNKER saves
+   without it (the desktop interface still checks whether the file changed
+   before it writes). Another program that writes `Bunker.mmf` ignores the
+   lock. When two windows change the same field of the same entry, the one
+   that saves last wins and says so; the other value is not kept anywhere.
+   `config.cfg` (settings and the failed-attempt counter) and `bunker.cfg`
+   are not covered by the lock.
 
 ## 7. Verifying these claims
 

@@ -23,7 +23,11 @@ class NetworkTouched(AssertionError):
     pass
 
 
+TOUCHED = []  # every blocked call, even one the app code catches
+
+
 def _blocked(*_a, **_k):
+    TOUCHED.append(_a)
     raise NetworkTouched("network was touched")
 
 
@@ -270,6 +274,10 @@ class IpDisplayThread(unittest.TestCase):
                 self.assertNotIn("203.0.113.7", out.getvalue())
 
     def test_banners_with_display_off_never_touch_the_network(self):
+        TOUCHED.clear()
+        starts = []
+        real_start = S.start_ip_fetch_thread
+        self._patch(S, "start_ip_fetch_thread", lambda: (starts.append(1), real_start()))
         self._patch(S, "check_internet_connection", _blocked)
         self._patch(S, "get_public_ipv4", _blocked)
         with mock.patch("socket.create_connection", side_effect=_blocked), \
@@ -279,6 +287,8 @@ class IpDisplayThread(unittest.TestCase):
             S.display_watermark(True)
             S.display_bunker(True)
         self.assertEqual(lookup_threads(), [])
+        self.assertEqual(starts, [])
+        self.assertEqual(TOUCHED, [])
 
     def test_banner_with_display_on_starts_exactly_one_thread(self):
         self._patch(S, "IP_REFRESH_SECONDS", 3600)

@@ -1266,7 +1266,7 @@ def main():
     """Main entry point"""
     check_terminal_size()
     clear_screen()
-    if not vaultSetup():
+    if not vaultSetup(setup_guide=display_setup_guide):
         print(nuke_art)
         print(nuke_text)
         print(divider)

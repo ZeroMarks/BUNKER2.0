@@ -51,8 +51,9 @@ class Wording(unittest.TestCase):
 
     def test_mobile_sentence_says_who_deletes(self):
         text = VF.self_destruct_warning(4, destroys=False)
-        self.assertIn("After 4 wrong master passwords in a row, the desktop interface "
-                      "permanently deletes this vault", text)
+        self.assertIn("Once 4 wrong master passwords in a row have been counted, the next "
+                      "wrong password on the desktop interface permanently deletes this vault",
+                      text)
         self.assertIn("this interface never does", text)
         self.assertNotIn("this vault is permanently deleted", text)
 
@@ -320,6 +321,23 @@ class Wiring(SetupCase):
         self.assertNotIn("not implemented", text)
         self.assert_no_vault()
 
+
+
+class BrokenLimitInSettings(SetupCase):
+    """A broken max_attempts in config.cfg must not make the login and the
+    warning disagree: the login uses the same fallback the messages use."""
+
+    def test_zero_limit_does_not_destroy_on_the_first_wrong_password(self):
+        from tests.test_vault_integrity import run_setup, desktop_login
+        self.assertTrue(run_setup())
+        config = M.load_ui_config()
+        config["max_attempts"] = 0
+        M.save_ui_config(config)
+        destroyed, menu = desktop_login(["wrong one!"])
+        self.assertFalse(destroyed, "a limit of 0 destroyed the vault on the first try")
+        self.assertFalse(menu)
+        self.assertEqual(M.load_ui_config()["attempts"], 1)
+        self.assertTrue(Path("Bunker.mmf").exists())
 
 if __name__ == "__main__":
     unittest.main()

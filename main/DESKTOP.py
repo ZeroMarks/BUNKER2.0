@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.fernet import Fernet
 
 from cryptography.exceptions import InvalidTag
-from main.VAULT_FILES import (integrity_status, record_integrity, attempts_notice,
+from main.VAULT_FILES import (integrity_status, record_integrity, attempts_notice, attempt_limit,
     finish_interrupted_change)
 from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_export,
     unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
@@ -112,7 +112,7 @@ def main(device_type='desktop'):
 
         ui_config = load_ui_config()
         attempts = ui_config["attempts"]
-        max_attempts = ui_config["max_attempts"]
+        max_attempts = attempt_limit(ui_config["max_attempts"])
         disable_ipv4 = ui_config["disable_ipv4"]
         current_timeout = ui_config["current_timeout"]
 
@@ -219,7 +219,7 @@ def main(device_type='desktop'):
                 #temporarily store ui_config to update attempts
                 ui_config = load_ui_config()
                 attempts = ui_config["attempts"]
-                max_attempts = ui_config["max_attempts"]
+                max_attempts = attempt_limit(ui_config["max_attempts"])
                 disable_ipv4 = ui_config["disable_ipv4"]
                 current_timeout = ui_config["current_timeout"]
                 

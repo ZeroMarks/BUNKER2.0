@@ -206,9 +206,10 @@ def self_destruct_warning(max_attempts=None, destroys=True):
         return (f"After {count}, this vault is permanently deleted. "
                 "Keep an encrypted export as a backup.")
     return (f"Wrong master passwords are counted here and on the desktop interface. "
-            f"After {count}, the desktop interface permanently deletes this vault; "
-            "this interface never does. Keep an encrypted export, made on the "
-            "desktop interface, as a backup.")
+            f"Once {count} have been counted, the next wrong password on the "
+            "desktop interface permanently deletes this vault; this interface "
+            "never does. Keep an encrypted export, made on the desktop "
+            "interface, as a backup.")
 
 
 # --- what the login screen says about attempts ------------------------------

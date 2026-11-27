@@ -382,11 +382,11 @@ Copy first, show only on request, is the common rule.
 
 ## 14. IP display stop and setup warning (2026-11-27, Pacific time)
 
-Two of the three before-tag items from §12. 208 tests pass on Python 3.13.
+Two of the three before-tag items from §12. An independent review of the diff found a test that could not fail and imprecise mobile wording; both are fixed. 210 tests pass on Python 3.13.
 
 **IP display (`main/SHARED_RESOURCES.py`).**
 - The lookup thread waits on a `threading.Event` (`stop_event.wait(IP_REFRESH_SECONDS)`) instead of `time.sleep(30)`. `stop_ip_fetch_thread()` sets the event, so the thread wakes and exits; it re-checks the event between the connectivity check and the lookup, and before it stores a result.
-- `start_ip_fetch_thread()` holds a lock and treats a thread that was told to stop as not running, so off/on always leaves exactly one thread.
+- `start_ip_fetch_thread()` holds a lock and treats a thread that was told to stop as not running, so off/on never leaves more than one thread looking up (a stopped thread may still be finishing its last call, and discards it).
 - The network calls now run outside `cache_lock`. Before, drawing the banner could wait up to about 15 seconds for a lookup.
 - Stop forgets the cached address; the banner shows "(checking...)" until the first answer instead of "None".
 - Limit: a lookup already under way when the display is turned off is not cancelled (the 8.8.8.8 check has a 5 s timeout, `curl` 10 s). Its result is discarded. Cancelling it would mean running `curl` with `Popen` and killing it on stop.
@@ -401,5 +401,6 @@ Two of the three before-tag items from §12. 208 tests pass on Python 3.13.
 
 **Not done:**
 1. `max_attempts` cannot be changed from inside BUNKER, and the other places that create a default `config.cfg` (`load_ui_config`, `MOBILE.py`) still write a literal 3. First step: use `DEFAULT_MAX_ATTEMPTS` there too.
-2. The mobile sentence is long for a narrow screen. Shorten it only with wording that stays true for attempts made on both interfaces.
-3. Windows clipboard history (§12) is the remaining before-tag item.
+2. Login now reads the limit through `attempt_limit()` too, so a broken `max_attempts` in `config.cfg` cannot make the guides and the login disagree.
+3. The mobile sentence is long for a narrow screen. Shorten it only with wording that stays true for attempts made on both interfaces.
+4. Windows clipboard history (§12) is the remaining before-tag item.

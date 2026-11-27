@@ -10,6 +10,7 @@ MUSTARD, VINTAGE, LPURPLE, PURPLE, CYAN)
 
 from main.SHARED_RESOURCES_MOBILE import clear_screen, ModernUI
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, safe_error
+from main.VAULT_FILES import attempt_limit
 
 from main.SHARED_RESOURCES_MOBILE import (
     vault, save_ui_config, load_ui_config, load_salt,
@@ -88,7 +89,7 @@ def main(device_type='mobile'):
     # Get UI configuration
     ui_config = load_ui_config()
     attempts = ui_config["attempts"]
-    max_attempts = ui_config["max_attempts"]
+    max_attempts = attempt_limit(ui_config["max_attempts"])
     disable_ipv4 = ui_config["disable_ipv4"]
     current_timeout = ui_config["current_timeout"]
     
@@ -117,7 +118,7 @@ def main(device_type='mobile'):
     # Get current timeout value
         ui_config = load_ui_config()
         attempts = ui_config["attempts"]
-        max_attempts = ui_config["max_attempts"]
+        max_attempts = attempt_limit(ui_config["max_attempts"])
         disable_ipv4 = ui_config["disable_ipv4"]
         current_timeout = ui_config["current_timeout"]
 
@@ -150,7 +151,7 @@ def main(device_type='mobile'):
     vault_ui = VaultUI(device_type)
     ui_config = load_ui_config()
     attempts = ui_config.get("attempts", 0)
-    max_attempts = ui_config.get("max_attempts", 3)
+    max_attempts = attempt_limit(ui_config.get("max_attempts"))
     vault_key = None
 
     files_state = integrity_status()

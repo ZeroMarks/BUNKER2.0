@@ -734,6 +734,7 @@ def setup_guide_short(destroys=True):
     print(f"\n{CYAN}SETUP GUIDE{RESET}")
     for line in (
         self_destruct_warning(destroys=destroys),
+        "Closing BUNKER does not reset the count; only a correct password does.",
         "Your master password cannot be recovered if you forget it.",
         "Choose a master password of at least 8 characters; a long passphrase is best.",
         "Type .c at a password prompt to cancel setup.",

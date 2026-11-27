@@ -22,7 +22,11 @@ class NetworkTouched(AssertionError):
     pass
 
 
+TOUCHED = []  # every blocked call, even one the app code catches
+
+
 def _blocked(*_a, **_k):
+    TOUCHED.append(_a)
     raise NetworkTouched("network was touched")
 
 
@@ -37,6 +41,9 @@ class OfflineByDefault(unittest.TestCase):
         os.chdir(self._tmp.name)
         self.addCleanup(self._restore)
         S.stop_ip_fetch_thread()
+        TOUCHED.clear()
+        self.thread_errors = []
+        self.ip_starts = []
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         for target in ("socket.socket.connect", "socket.socket.connect_ex",
@@ -47,6 +54,14 @@ class OfflineByDefault(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(S.subprocess, "check_output", side_effect=_blocked))
         self.stack.enter_context(mock.patch.object(S, "check_internet_connection", _blocked))
         self.stack.enter_context(mock.patch.object(S, "get_public_ipv4", _blocked))
+        self.stack.enter_context(mock.patch.object(S, "get_external_ip", _blocked))
+        self.stack.enter_context(mock.patch.object(D, "get_external_ip", _blocked))
+        self.stack.enter_context(mock.patch.object(
+            threading, "excepthook", lambda args: self.thread_errors.append(args.exc_value)))
+        real_start = S.start_ip_fetch_thread
+        self.stack.enter_context(mock.patch.object(
+            S, "start_ip_fetch_thread",
+            lambda: (self.ip_starts.append(1), real_start())))
 
     def _restore(self):
         os.chdir(self._cwd)
@@ -86,6 +101,18 @@ class OfflineByDefault(unittest.TestCase):
         self.assertIn("IP fetching disabled", out.getvalue())
         self.assertNotIn("INTERNET IP", out.getvalue())
         self.assertEqual(self.lookup_threads(), [])
+        self.assertEqual(self.ip_starts, [], "the IP lookup thread was started")
+        self.assertEqual(TOUCHED, [], "the network was touched (even if the error was caught)")
+        self.assertEqual(self.thread_errors, [])
+
+    def test_harness_catches_a_swallowed_touch(self):
+        """Control: a network call that the app catches is still caught here."""
+        self.assertEqual(S.local_ipv4() is not None, True)  # local, allowed
+        try:
+            S.requests.get("https://example.invalid")
+        except NetworkTouched:
+            pass
+        self.assertEqual(len(TOUCHED), 1)
 
 
 if __name__ == "__main__":

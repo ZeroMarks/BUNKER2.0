@@ -104,14 +104,16 @@ want a new, empty vault, move the old `bunker.salt`, `bunker.cfg` and
 
 ## "Maximum attempts reached"
 
-- On a vault with a valid `bunker.chk`, three wrong master passwords on
-  the desktop interface destroy the vault by design. Before the last one,
-  BUNKER shows "LAST ATTEMPT" and asks you to type `LAST`; pressing Enter
-  instead exits without using the attempt. Only an exported backup can
-  bring the data back after a self-destruct (see below).
-- The counter is shared by both interfaces. The mobile interface never
-  deletes the vault and always lets you try once per start, so the right
-  password still works there after failures elsewhere.
+- On a vault with a valid `bunker.chk`, three wrong master passwords
+  destroy the vault by design, in the desktop and the mobile interface
+  alike. Before the last one, BUNKER shows "LAST ATTEMPT" and asks you to
+  type `LAST`; pressing Enter instead exits without using the attempt. Only
+  an exported backup can bring the data back after a self-destruct (see
+  below).
+- The counter is shared by both interfaces and kept between starts, so
+  switching interface or restarting BUNKER gives no extra attempts. If the
+  counter is already at the limit, the right password still works once you
+  type `LAST`.
 - On a vault without a valid record, or while a password change is
   unfinished, BUNKER leaves the files untouched and exits.
 

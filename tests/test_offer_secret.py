@@ -321,6 +321,11 @@ class KlipperRefused(Base):
         SECURE_IO._system_clipboard = None
         self.addCleanup(setattr, SECURE_IO, "_system_clipboard", self._saved)
         self.addCleanup(SECURE_IO.clear_clipboard_if_ours)
+        # These tests are about the pyperclip path (Linux); keep the native
+        # Windows and macOS backends out of the way on those systems.
+        patcher = mock.patch.object(SECURE_IO, "_native_clipboard", lambda: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_klipper_never_receives_the_secret(self):
         module, calls = self.fake_pyperclip("copy_klipper")

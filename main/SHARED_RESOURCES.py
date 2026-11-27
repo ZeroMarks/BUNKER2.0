@@ -107,37 +107,69 @@ def displaySection(title):
     print(f"{FBLUE}\n{'◢◤ ' * 5} {CYAN}{title} {FBLUE}{'◢◤ ' * 5}{RESET}")
 
 
-# Initialize variables and locks
-cached_ip = None
+# --- public IP display (off by default) ------------------------------------
+# While the display is on, one background thread checks connectivity and looks
+# up the public IP every IP_REFRESH_SECONDS. Turning the display off sets that
+# thread's stop event: it wakes at once, makes no further lookup and exits.
+IP_REFRESH_SECONDS = 30
+IP_THREAD_NAME = "bunker-ip-lookup"
+
+cached_ip = None          # None: not known yet, "": offline, otherwise the IP
 cache_lock = threading.Lock()
-ip_fetch_thread = None
+ip_fetch_thread = None    # the running lookup thread, or None
+_ip_fetch_stop = None     # the stop event that belongs to ip_fetch_thread
+_ip_thread_lock = threading.Lock()
+
 
 def start_ip_fetch_thread():
-    global ip_fetch_thread
-    if not ip_fetch_thread or not ip_fetch_thread.is_alive():
-        ip_fetch_thread = threading.Thread(target=fetch_ip_thread_func, daemon=True)
-        ip_fetch_thread.start()
+    """Start the lookup thread unless one is already running. Never stacks:
+    a thread that was told to stop is not counted as running, and it cannot
+    make another lookup."""
+    global ip_fetch_thread, _ip_fetch_stop
+    with _ip_thread_lock:
+        if (ip_fetch_thread is not None and ip_fetch_thread.is_alive()
+                and _ip_fetch_stop is not None and not _ip_fetch_stop.is_set()):
+            return
+        stop_event = threading.Event()
+        thread = threading.Thread(target=fetch_ip_thread_func, args=(stop_event,),
+                                  name=IP_THREAD_NAME, daemon=True)
+        ip_fetch_thread, _ip_fetch_stop = thread, stop_event
+        thread.start()
 
 
 def stop_ip_fetch_thread():
-    global ip_fetch_thread
-    if ip_fetch_thread and ip_fetch_thread.is_alive():
+    """Stop the lookups. The thread is woken from its wait and exits without
+    another connection; a lookup already in flight is discarded. The cached
+    IP is forgotten, so a stale address is never shown later."""
+    global ip_fetch_thread, _ip_fetch_stop, cached_ip
+    with _ip_thread_lock:
+        if _ip_fetch_stop is not None:
+            _ip_fetch_stop.set()
         ip_fetch_thread = None
+        _ip_fetch_stop = None
+    with cache_lock:
+        cached_ip = None
 
 
-
-def fetch_ip_thread_func():
+def fetch_ip_thread_func(stop_event):
     global cached_ip
-    while True:
-        current_connection = check_internet_connection()
+    while not stop_event.is_set():
+        # The network calls run outside cache_lock, so drawing the banner
+        # never waits for a slow lookup.
+        online = check_internet_connection()
+        if stop_event.is_set():
+            break
+        ip = get_public_ipv4() if online else None
         with cache_lock:
-            if current_connection:
-                ip = get_public_ipv4()
-                if ip:  # Update cache only if new IP is successfully fetched
-                    cached_ip = ip
-            else:
-                cached_ip = ""  # Set cached_ip to empty string to indicate offline
-        time.sleep(30)  # Check every minute for internet connectivity changes
+            if stop_event.is_set():
+                break  # turned off while looking up: keep nothing
+            if not online:
+                cached_ip = ""  # empty string means offline
+            elif ip:  # update only when a new IP was fetched
+                cached_ip = ip
+        # Sleeps until the next refresh, or returns True at once when stopped.
+        if stop_event.wait(IP_REFRESH_SECONDS):
+            break
 
 def get_public_ipv4() -> Optional[str]:
     try:
@@ -167,7 +199,7 @@ def get_public_ipv4() -> Optional[str]:
 def check_internet_connection() -> bool:
     try:
         # Attempt to create a socket connection to Google's DNS server (8.8.8.8)
-        socket.create_connection(("8.8.8.8", 53), timeout=5)
+        socket.create_connection(("8.8.8.8", 53), timeout=5).close()
         return True
     except OSError:
         return False
@@ -180,6 +212,8 @@ def print_IP(disable_ipv4: bool) -> str:
             ipv4_string = "   (IP fetching disabled)  "
         elif cached_ip == "":
             ipv4_string = "INTERNET IP:   (OFFLINE)   "
+        elif cached_ip is None:
+            ipv4_string = "INTERNET IP: (checking...) "
         else:
             ipv4_string = f"INTERNET IP: {cached_ip}"
     return ipv4_string

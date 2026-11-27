@@ -1,6 +1,7 @@
 import base64, json, sys, getpass, os, gc, random, string, \
 platform, subprocess, threading, time, pyperclip, signal,time,datetime, uuid, hashlib
 from main.SECURE_IO import safe_error, write_private_bytes
+from main.VAULT_STORE import write_bytes_atomic
 
 from typing import Optional, Dict, Any, Tuple, Union, List
 

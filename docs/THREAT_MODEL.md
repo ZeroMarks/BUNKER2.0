@@ -70,8 +70,8 @@ concern for AES-GCM.
   (or an earlier setup was interrupted), and asks every question before
   writing. Changing the master password re-encrypts every field and swaps
   all files together, keeping the old ones until every write succeeded.
-- **Atomic, private writes** (0600 temp file, fsync, rename) for the salt,
-  settings, key and export files.
+- **Atomic, private writes** (0600 temp file, fsync, rename, directory
+  fsync) for the vault database, salt, config, settings, key and export files.
 - **Vault data never leaves the machine.** BUNKER makes no network request
   unless you ask it to look up your public IP, in one of two places:
   - the IP display (off by default): once turned on, it checks connectivity

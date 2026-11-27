@@ -104,8 +104,9 @@ want a new, empty vault, move the old `bunker.salt`, `bunker.cfg` and
 
 ## "Maximum attempts reached"
 
-- On a vault with a valid `bunker.chk`, three wrong master passwords on
-  the desktop interface destroy the vault by design. Before the last one,
+- On a vault with a valid `bunker.chk`, three wrong master passwords in a row
+  (the default limit) on the desktop interface destroy the vault by design.
+  Setup says so before the vault is created. Before the last one,
   BUNKER shows "LAST ATTEMPT" and asks you to type `LAST`; pressing Enter
   instead exits without using the attempt. Only an exported backup can
   bring the data back after a self-destruct (see below).

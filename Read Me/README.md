@@ -18,14 +18,15 @@ BUNKER 2.0 is a locally-stored, offline password and notes manager built with pr
 **Key Features:**
 - **AES-256-GCM encryption** - key derived from your master password with Argon2id + PBKDF2
 - **100% Local Storage** - No cloud, no tracking, no data mining
+- **Offline by Default** - BUNKER makes no network connection unless you ask it to show your public IP
 - **Desktop and mobile interfaces** - BUNKER picks the interface for your device and asks you to confirm
 - **Auto-Logout Timer** - Configurable inactivity protection
 - **Password Generator** - Create strong random passwords, copied to the clipboard and shown only if you ask
 - **Encrypted Notes** - Secure storage for sensitive information
 - **Encrypted Export/Import** - Back up profiles and notes with a passphrase
 - **Clipboard Auto-Clear** - Copied passwords and notes are cleared after 30 seconds and when BUNKER closes
-- **IP Display Toggle** - Optionally show your public IP
-- **Failed-Login Limit** - Too many wrong master passwords wipes the vault
+- **IP Display Toggle** - Off by default. Turn it on to show your public IP in the banner; turn it off and the lookups stop
+- **Failed-Login Limit** - Too many wrong master passwords in a row (3 by default) wipe the vault. Setup tells you so before you choose a password
 
 <img width="1005" height="648" alt="jl4s88eza1rti5bd10d4504bqk7n" src="https://github.com/user-attachments/assets/37696825-96c5-47f4-9b94-0b7baf19578f" />
 
@@ -98,7 +99,7 @@ pip install [missing_package_name]
 python3 BUNKER.py
 ```
 
-On first run BUNKER walks you through creating a new vault and master password (at least 8 characters). After that you'll reach the BUNKER ACCESS page each time you launch.
+On first run BUNKER walks you through creating a new vault and master password (at least 8 characters). Before it asks for the password, setup warns you that 3 wrong master passwords in a row permanently delete the vault, and waits for Enter; type `.g` at the first prompt to read the setup guide. After that you'll reach the BUNKER ACCESS page each time you launch.
 
 **Your vault files** live in the folder you run BUNKER from: `Bunker.mmf` (encrypted vault), `bunker.salt` and `bunker.cfg`. You need all of them to open the vault. Next to them BUNKER keeps `bunker.chk` (a record that the files belong together) and `config.cfg` (your settings and the failed-login counter, encrypted and tied to this machine and vault). BUNKER creates `config.cfg` on first run; [`config.example`](../config.example) lists what it holds and its defaults. All of these are git-ignored so you can't commit them by accident.
 

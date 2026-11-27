@@ -174,6 +174,44 @@ def write_new_vault(salt, encrypted_config, encrypted_db, after_salt=None):
     finish_setup()
 
 
+# --- what setup and the guides say about the attempt limit ------------------
+
+DEFAULT_MAX_ATTEMPTS = 3  # what a new vault's config.cfg starts with
+
+
+def attempt_limit(value=None):
+    """The failed-attempt limit as a whole number of at least 1. Anything
+    else (missing, text, zero, negative) gives the default, so a message is
+    never built from a broken setting."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return DEFAULT_MAX_ATTEMPTS
+    return value
+
+
+def attempts_phrase(max_attempts=None, kind="master password"):
+    """'3 incorrect master password attempts' / '1 incorrect master password
+    attempt', for the guide texts."""
+    limit = attempt_limit(max_attempts)
+    return f"{limit} incorrect {kind} attempt{'' if limit == 1 else 's'}"
+
+
+def self_destruct_warning(max_attempts=None, destroys=True):
+    """The sentence a new user must see before a vault exists: wrong master
+    passwords delete it. ``destroys`` is False for the mobile interface,
+    which counts attempts but never deletes."""
+    limit = attempt_limit(max_attempts)
+    count = ("1 wrong master password" if limit == 1
+             else f"{limit} wrong master passwords in a row")
+    if destroys:
+        return (f"After {count}, this vault is permanently deleted. "
+                "Keep an encrypted export as a backup.")
+    return (f"Wrong master passwords are counted here and on the desktop interface. "
+            f"Once {count} have been counted, the next wrong password on the "
+            "desktop interface permanently deletes this vault; this interface "
+            "never does. Keep an encrypted export, made on the desktop "
+            "interface, as a backup.")
+
+
 # --- what the login screen says about attempts ------------------------------
 
 def attempts_notice(attempts, max_attempts, files_state, destroys):

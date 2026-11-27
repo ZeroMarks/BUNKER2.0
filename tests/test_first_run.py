@@ -26,7 +26,8 @@ class FirstRun(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         os.chdir(self._tmp.name)
         self.addCleanup(self._restore)
-        answers = iter(["y", "y", PASSWORD, PASSWORD, ""])
+        # ready, acknowledge the self-destruct warning, show password, ...
+        answers = iter(["y", "", "y", PASSWORD, PASSWORD, ""])
         with mock.patch("builtins.input", lambda *a, **k: next(answers)), \
              mock.patch.object(M, "setup_timeout", lambda *a, **k: 300), \
              mock.patch.object(M, "clear_screen", quiet), \

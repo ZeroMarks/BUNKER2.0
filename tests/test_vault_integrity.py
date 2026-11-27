@@ -34,7 +34,8 @@ class Reached(BaseException):
 
 
 def run_setup(password=PASSWORD, timeout=300):
-    answers = iter(["y", "y", password, password, ""])
+    # ready, acknowledge the self-destruct warning, show password, ...
+    answers = iter(["y", "", "y", password, password, ""])
     with mock.patch("builtins.input", lambda *a, **k: next(answers)), \
          mock.patch.object(M, "setup_timeout", lambda *a, **k: timeout), \
          mock.patch.object(M, "clear_screen", quiet), \

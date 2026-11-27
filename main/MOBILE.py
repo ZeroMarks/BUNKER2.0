@@ -103,7 +103,7 @@ def main(device_type='mobile'):
         print(subwm_m)
         print(f"{CYAN}\nBUNKER SETUP\n\nWelcome to Bunker!\n\n{GOLD}Detected device type: {device_type}{RESET}\n\n{RED}ALERT: Bunker.mmf was DESTROYED or not found in local directory... SETUP A NEW PASSWORD!{RESET}")
         # Perform vault setup
-        if not vaultSetup():
+        if not vaultSetup(destroys=False):
             return  # Return if setup was cancelled or failed
             
         # Try to read the newly created vault
@@ -133,7 +133,7 @@ def main(device_type='mobile'):
         #print(divider)
         print(f"{CYAN}\nBUNKER SETUP\n\nWelcome to Bunker!\n\n{RED}ALERT: Bunker.mmf was DESTROYED or not found in local directory... SETUP A NEW PASSWORD!{RESET}")
         # Perform vault setup
-        if not vaultSetup():
+        if not vaultSetup(destroys=False):
             return  # Return if setup was cancelled or failed
     
     # Initialize vault with user input

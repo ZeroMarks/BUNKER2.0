@@ -10,7 +10,7 @@ from main.IMPORT_FILES import (ImportRejected, read_import_file, is_encrypted_ex
     unwrap_encrypted, parse_payload, validate_notes, validate_profiles, existing_notes,
     existing_profiles, plan_notes, plan_profiles, has_controls, printable)
 from main.SECURE_IO import copy_secret, copy_notice, reveal_secret, offer_secret, safe_error, mask, open_private, CLIPBOARD_CLEAR_SECONDS, write_private_bytes
-from main.INITIALIZE import  (vaultSetup, display_user_guide,
+from main.INITIALIZE import  (vaultSetup, display_user_guide, display_setup_guide,
 timeoutInput, load_salt, loadDatabase, vault,changeMasterPassword, 
 changeAutoLogoutTimer, MIN_PASSWORD_LENGTH,load_ui_config,
 MAX_PASSWORD_LENGTH, RECOMMENDED_PASSWORD_LENGTH, save_ui_config,
@@ -56,8 +56,12 @@ def main(device_type='desktop'):
             print(
                 f"{CYAN}\nBUNKER SETUP\n\nWelcome to Bunker!\n\n{GOLD}Detected device type: {device_type}{RESET}\n\n{RED}ALERT: Bunker.mmf was DESTROYED or not found in local directory... SETUP A NEW PASSWORD!{RESET}"
             )
-            # Perform vault setup (it refuses if other vault files exist)
-            if not vaultSetup():
+            # Perform vault setup (it refuses if other vault files exist).
+            # On a phone or tablet the login that follows is the mobile one,
+            # which never deletes the vault and is too narrow for the full guide.
+            narrow = device_type in ('mobile', 'tablet')
+            if not vaultSetup(setup_guide=None if narrow else display_setup_guide,
+                              destroys=not narrow):
                 return  # Return if setup was cancelled or failed
         except Exception as e:
             # Exists but cannot be opened (permissions, locked by another

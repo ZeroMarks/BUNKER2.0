@@ -146,6 +146,74 @@ class DamagedFilesNeverCountAsWrongPassword(VaultTestCase):
         self.assertEqual(VF.try_password(PASSWORD, I.vault)[0], "mismatch")
 
 
+class RecordOnlyAfterTheDatabaseOpens(VaultTestCase):
+    """A vault without a record ("unknown") gets one only once a login has
+    opened Bunker.mmf too. A password that opens bunker.cfg alone (a folder
+    with bunker.salt/bunker.cfg from another backup than the database) must
+    not record those files as a verified set, or self-destruct would be
+    armed on files that do not belong together."""
+
+    def setUp(self):
+        super().setUp()
+        # The database of a different vault, next to this vault's salt,
+        # config and settings: PASSWORD opens bunker.cfg but not Bunker.mmf,
+        # and NEW_PASSWORD (the database's own) is wrong for bunker.cfg.
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other, True)
+        os.chdir(other)
+        self.assertTrue(run_setup(NEW_PASSWORD))
+        foreign_db = Path("Bunker.mmf").read_bytes()
+        os.chdir(self._tmp.name)
+        self.assertTrue(run_setup(PASSWORD))
+        Path("Bunker.mmf").write_bytes(foreign_db)
+        os.remove("bunker.chk")  # RECOVERY.md: "delete bunker.chk"
+        self.assertEqual(VF.integrity_status(), "unknown")
+
+    def test_desktop_login_that_opens_only_the_config_writes_no_record(self):
+        self.assertEqual(desktop_login([PASSWORD]), (False, False))
+        self.assertFalse(Path("bunker.chk").exists())
+        self.assertEqual(VF.integrity_status(), "unknown")
+        self.assertFalse(VF.destroy_allowed())
+
+    def test_limit_still_cannot_destroy_after_such_a_login(self):
+        desktop_login([PASSWORD])
+        destroyed, _ = desktop_login([NEW_PASSWORD] * 3,
+                                     prompts=["n", "n", "LAST", "n"])
+        self.assertFalse(destroyed)
+        self.assertTrue(Path("Bunker.mmf").exists())
+
+    def test_try_password_never_writes_the_record(self):
+        status, _ = VF.try_password(PASSWORD, I.vault)
+        self.assertEqual(status, "ok")
+        self.assertFalse(Path("bunker.chk").exists())
+
+    def test_mobile_login_that_opens_only_the_config_writes_no_record(self):
+        import main.MOBILE as MB
+        answers = iter(["n"] * 5)
+        with mock.patch("builtins.input", lambda *a, **k: next(answers)), \
+             mock.patch.object(MB, "timeout_getpass", lambda *a, **k: PASSWORD), \
+             mock.patch.object(MB, "clear_screen", quiet), \
+             mock.patch.object(MB.time, "sleep", quiet), \
+             contextlib.redirect_stdout(io.StringIO()):
+            try:
+                MB.main("mobile")
+            except (SystemExit, StopIteration):
+                pass
+        self.assertFalse(Path("bunker.chk").exists())
+        self.assertEqual(VF.integrity_status(), "unknown")
+
+    def test_full_login_still_starts_the_record(self):
+        # Put the matching database back: now the login opens everything.
+        Path("bunker.cfg").unlink()
+        Path("bunker.salt").unlink()
+        Path("config.cfg").unlink()
+        Path("Bunker.mmf").unlink()
+        self.assertTrue(run_setup(PASSWORD))
+        os.remove("bunker.chk")
+        self.assertEqual(desktop_login([PASSWORD]), (False, True))
+        self.assertEqual(VF.integrity_status(), "ok")
+
+
 class SetupNeverOverwritesAVault(VaultTestCase):
     def test_existing_salt_without_database_refuses_setup(self):
         self.assertTrue(run_setup())

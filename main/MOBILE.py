@@ -146,7 +146,7 @@ def main(device_type='mobile'):
     # Handle login process (shared, persistent attempt counter)
     from main.INITIALIZE import vault as login_vault
     from main.VAULT_FILES import (try_password, integrity_status, attempts_notice,
-                                  finish_interrupted_change)
+                                  finish_interrupted_change, record_integrity)
     vault_ui = VaultUI(device_type)
     ui_config = load_ui_config()
     attempts = ui_config.get("attempts", 0)
@@ -154,21 +154,36 @@ def main(device_type='mobile'):
     vault_key = None
 
     files_state = integrity_status()
-    tried_this_launch = False
 
-    # One try per launch is always allowed, even when the shared counter is
-    # already at the limit (for example after failures on the desktop): the
-    # mobile interface never destroys, so refusing the correct password here
-    # would only lock the owner out. Wrong passwords are still counted.
-    while attempts < max_attempts or not tried_this_launch:
+    # The limit works exactly as on the desktop (DESKTOP.main, with the
+    # shared VAULT_FILES.attempts_notice): the counter is shared and kept
+    # between starts, so switching interface or relaunching gives no extra
+    # guesses; the attempt that would destroy the vault is announced and must
+    # be confirmed by typing LAST; and a wrong password at the limit destroys
+    # a verified vault.
+    while True:
         clear_screen()
         title_with_label(device_type)
         print(f"{CYAN}BUNKER ACCESS{RESET}")
         print(divider_m)
 
         notice_colours = {"info": PURPLE, "warn": GOLD, "alert": RED}
-        for kind, text in attempts_notice(attempts, max_attempts, files_state, destroys=False):
+        notice = attempts_notice(attempts, max_attempts, files_state)
+        for kind, text in notice:
             print(f"{notice_colours[kind]}{text}{RESET}")
+        if any(kind == "alert" for kind, _ in notice):
+            # The next wrong password destroys the vault. Ask once, in
+            # words, so a reflexive "n" + Enter cannot spend it.
+            confirm = input(
+                f"{RED}Type LAST to make this final attempt, or press Enter to exit: {RESET}"
+            ).strip()
+            if confirm == timeoutGlobalCode:
+                timeoutCleanup()
+                return
+            if confirm.lower() != "last":
+                clear_screen()
+                print(f"{GREEN}Exiting. No attempt was used.{RESET}")
+                return
         print(f"{GOLD}Security clearance required! {RESET}")
 
         user_cmd = input(f"{GOLD}Do you want to show your password? (y/n) or exit(e): {RESET}").lower()
@@ -203,9 +218,7 @@ def main(device_type='mobile'):
 
         # Same rules as the desktop login (VAULT_FILES.try_password): only a
         # wrong password counts, damaged files never do, and the counter is
-        # the shared one, so switching interface does not reset it. Mobile
-        # never destroys anything itself.
-        tried_this_launch = True
+        # the shared one, so switching interface does not reset it.
         try:
             status, key = try_password(master_pass, login_vault)
         except Exception as e:
@@ -229,10 +242,17 @@ def main(device_type='mobile'):
         save_ui_config(ui_config)
         attempts = ui_config["attempts"]
         vault_ui.ui.error_message("Incorrect access password.")
-
-    if not vault_key:
-        vault_ui.ui.error_message("Maximum login attempts exceeded")
-        return
+        if attempts >= max_attempts:
+            print(f"{CYAN} ** ALERT: Maximum attempts reached. **{RESET}")
+            if files_state == "ok":
+                # Files verified intact, so these really were wrong
+                # passwords: the one deliberate trigger, as on the desktop.
+                from main.SHARED_RESOURCES import self_destruct
+                self_destruct()  # exits; returns only if it refused to run
+            vault_ui.ui.error_message(
+                "Maximum attempts reached. The vault files could not be verified, "
+                "so they were left untouched.")
+            return
 
     # Load initial vault contents
     try:
@@ -252,6 +272,10 @@ def main(device_type='mobile'):
         return
     if files_state == "interrupted":
         finish_interrupted_change()
+    elif files_state == "unknown":
+        # Vault from before integrity records: start one now, and only now
+        # that Bunker.mmf has opened with this key too.
+        record_integrity()
 
     # Initialize the UI with detected device type
     vault_ui = VaultUI(device_type)

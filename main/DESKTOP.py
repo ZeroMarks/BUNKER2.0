@@ -142,7 +142,7 @@ def main(device_type='desktop'):
             # Shown before every password prompt, so the attempt that would
             # destroy the vault is always announced before it is typed.
             notice_colours = {"info": PURPLE, "warn": GOLD, "alert": RED}
-            notice = attempts_notice(attempts, max_attempts, files_state, destroys=True)
+            notice = attempts_notice(attempts, max_attempts, files_state)
             for kind, text in notice:
                 print(f"{notice_colours[kind]}{text}{RESET}")
             if any(kind == "alert" for kind, _ in notice):
@@ -259,9 +259,6 @@ def main(device_type='desktop'):
                 #with open("bunker.cfg", "wb") as f:
                 #    f.write(encrypted_config)
                 
-                if files_state == "unknown":
-                    # Vault from before integrity records: start one now.
-                    record_integrity()
                 hashed_pass = derived_key
                 break
             else:
@@ -318,6 +315,10 @@ def main(device_type='desktop'):
                 # This key opens both bunker.cfg and Bunker.mmf: the current
                 # files are a complete set. Record them, drop the copies.
                 finish_interrupted_change()
+            elif files_state == "unknown":
+                # Vault from before integrity records: start one now, and
+                # only now that Bunker.mmf has opened with this key too.
+                record_integrity()
 
             # Clean up sensitive data
             if 'entered_pass' in locals():

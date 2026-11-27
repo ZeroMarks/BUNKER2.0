@@ -111,7 +111,12 @@ a known limitation, it says so.
   `Bunker.mmf` could not be opened (e.g. locked by another program) and
   replaced the salt before its last question.
 - **Mobile login checks passwords like desktop** and shares the same
-  attempt counter.
+  attempt counter and limit: the same "LAST ATTEMPT" confirmation, and
+  the same self-destruct after 3 wrong passwords on verified files.
+  Restarting or switching interface gives no extra attempts.
+- **A vault without an integrity record** gets one only after a login that
+  opens the database itself, not just `bunker.cfg`, so files from different
+  backups are never recorded as one set.
 - **Safer file writes.** The salt, config, settings and key files are
   written atomically and owner-only, so a crash mid-write can't leave a
   truncated file that would lock you out. (Atomic writes for the vault

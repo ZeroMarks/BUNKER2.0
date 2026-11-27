@@ -42,21 +42,24 @@ class PolicyIsStructural(unittest.TestCase):
                         found.append((path.name, node, parents))
         return found
 
-    def test_only_one_wipe_call_and_it_is_the_login_limit(self):
+    def test_only_the_login_limit_calls_a_wipe(self):
+        # One call per interface: both apply the same failed-login limit.
         calls = self._calls()
-        self.assertEqual(len(calls), 1, [(c[0], c[1].lineno) for c in calls])
-        fname, node, parents = calls[0]
-        self.assertEqual(fname, "DESKTOP.py")
-        self.assertEqual(getattr(node.func, "id", None), "self_destruct")
-        guards, p = [], parents.get(node)
-        while p is not None:
-            if isinstance(p, ast.If):
-                guards.append(ast.unparse(p.test))
-            p = parents.get(p)
-        # Must sit inside BOTH: the limit is reached AND the vault files were
-        # verified intact (so the failures really were wrong passwords).
-        self.assertIn("attempts >= max_attempts", guards)
-        self.assertIn("files_state == 'ok'", guards)
+        self.assertEqual(sorted(c[0] for c in calls), ["DESKTOP.py", "MOBILE.py"],
+                         [(c[0], c[1].lineno) for c in calls])
+        for fname, node, parents in calls:
+            with self.subTest(fname):
+                self.assertEqual(getattr(node.func, "id", None), "self_destruct")
+                guards, p = [], parents.get(node)
+                while p is not None:
+                    if isinstance(p, ast.If):
+                        guards.append(ast.unparse(p.test))
+                    p = parents.get(p)
+                # Must sit inside BOTH: the limit is reached AND the vault
+                # files were verified intact (so the failures really were
+                # wrong passwords).
+                self.assertIn("attempts >= max_attempts", guards)
+                self.assertIn("files_state == 'ok'", guards)
 
 
 class LoginFlowNeverWipesOnErrors(unittest.TestCase):

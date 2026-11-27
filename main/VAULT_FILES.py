@@ -13,7 +13,10 @@ record, ``bunker.chk``, with SHA-256 hashes of ``bunker.salt`` and
   finish: the record says so, or ``*.prev`` copies are still present) or
   "missing" (salt or config absent).
 * Login counts a failed attempt only when the status is "ok" or "unknown",
-  and self-destruct may only run when it is "ok".
+  and self-destruct may only run when it is "ok". Both interfaces apply the
+  same notice (``attempts_notice``) and the same limit.
+* An "unknown" vault gets its record only after a login has opened
+  Bunker.mmf as well as bunker.cfg, never from bunker.cfg alone.
 * While a change is "interrupted" the user may not know which password is
   current, so nothing is counted or destroyed. A correct password that also
   opens the database finishes the change (``finish_interrupted_change``).
@@ -176,11 +179,11 @@ def write_new_vault(salt, encrypted_config, encrypted_db, after_salt=None):
 
 # --- what the login screen says about attempts ------------------------------
 
-def attempts_notice(attempts, max_attempts, files_state, destroys):
+def attempts_notice(attempts, max_attempts, files_state):
     """Lines to show above the password prompt, shared by both interfaces so
-    they count and warn the same way. ``destroys`` is True for the desktop
-    interface, the only one that self-destructs. Returns a list of
-    ``(kind, text)`` with kind "info", "warn" or "alert"."""
+    they count, warn and enforce the limit the same way. Returns a list of
+    ``(kind, text)`` with kind "info", "warn" or "alert". An "alert" means
+    the next wrong password destroys the vault."""
     if files_state == "interrupted":
         return [("warn", "A master password change did not finish. Try your new "
                          "password, then your old one. Wrong passwords are not counted "
@@ -193,17 +196,8 @@ def attempts_notice(attempts, max_attempts, files_state, destroys):
         return lines
     if files_state != "ok" or attempts < max_attempts - 1:
         return lines
-    if destroys:
-        lines.append(("alert", "LAST ATTEMPT: one more wrong password permanently destroys "
-                               "this vault. If you are not sure of the password, exit now (e)."))
-    elif attempts >= max_attempts:
-        lines.append(("alert", "The failed-attempt limit is reached. This interface never "
-                               "deletes the vault, but on the desktop interface the next "
-                               "wrong password destroys it."))
-    else:
-        lines.append(("alert", "LAST ATTEMPT: after one more wrong password, the desktop "
-                               "interface destroys this vault on the next wrong password. "
-                               "If you are not sure of the password, exit now (e)."))
+    lines.append(("alert", "LAST ATTEMPT: one more wrong password permanently destroys "
+                           "this vault. If you are not sure of the password, exit now (e)."))
     return lines
 
 
@@ -305,7 +299,9 @@ def try_password(password, vault):
       step; never count these as attempts
 
     A correct password during an interrupted change returns "ok". The caller
-    then calls finish_interrupted_change() once Bunker.mmf has opened too.
+    then calls finish_interrupted_change() once Bunker.mmf has opened too,
+    and for an "unknown" vault record_integrity() at the same point. This
+    function never writes any file.
     """
     import base64
     from cryptography.exceptions import InvalidTag
@@ -327,6 +323,7 @@ def try_password(password, vault):
     if not vault.verify_password_enhanced(password, base64.b64decode(config["salt"]),
                                           base64.b64decode(config["verifier"])):
         return "inconsistent", None
-    if status == "unknown":
-        record_integrity()
+    # Nothing is written here, not even for an "unknown" vault: bunker.cfg
+    # opening does not prove Bunker.mmf belongs with it. The caller records
+    # the files (record_integrity) once the database has opened too.
     return "ok", key

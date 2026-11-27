@@ -166,9 +166,9 @@ python3 BUNKER.py   # interactive; needs a real terminal
 - **Self-destruct (maintainer ruling).** It fires only when the user
   deliberately triggers it: the failed-login limit, never a crash, error,
   Ctrl+C, timeout or EOF.
-  - Code: one call site in `DESKTOP.main`, guarded by `attempts >= max_attempts` **and** `files_state == "ok"`. `tests/test_self_destruct_policy.py` enforces both with an AST check.
+  - Code: one call site in each login (`DESKTOP.main`, `MOBILE.main`), each guarded by `attempts >= max_attempts` **and** `files_state == "ok"`. `tests/test_self_destruct_policy.py` enforces both with an AST check.
   - Reason for the second guard: AES-GCM raises the same `InvalidTag` for a wrong key and for damaged data. So `main/VAULT_FILES.py` keeps `bunker.chk` (SHA-256 of salt and config), and only failures on verified files count.
-  - Vaults without a record ("unknown") count attempts but are never destroyed. They get a record at their next successful login.
+  - Vaults without a record ("unknown") count attempts but are never destroyed. They get a record at their next login that opens `Bunker.mmf` too (`try_password` never writes; the caller records after the database decrypts).
 - **Mobile saves (maintainer ruling).** Mobile uses the same `Bunker.mmf`.
   - `Mobile.mmf` was not a deliberate separate vault: it appeared only in one dead function, and mobile's real save called a method that didn't exist.
   - Mobile now uses desktop's flat `{id: entry}` format through `VAULT_STORE`, because desktop calls `.get()` on every value.
@@ -177,7 +177,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
   is left visible and triaged.
 - **Atomic, owner-only writes** (temp file with mode 0600, fsync, `os.replace`) for the vault, salt, config, settings, key files and exports. `tests/test_atomic_vault_writes.py` fails if anything opens `Bunker.mmf` for writing directly.
 - **Interrupted password change.** `replace_vault` keeps `*.prev` copies and marks `bunker.chk` as `"changing"` before its first write. While either is present, `integrity_status()` is `"interrupted"`: no attempt is counted (the user may be trying the other password), nothing is destroyed, and `self_destruct()` refuses on its own check too. A password that opens both `bunker.cfg` and `Bunker.mmf` finishes the change (`finish_interrupted_change`). No automatic restore from `.prev`: the user follows `docs/RECOVERY.md`, which keeps the code path small. `tests/test_interrupted_password_change.py` kills a real change after each of its 12 steps.
-- **Last attempt.** Both interfaces print `VAULT_FILES.attempts_notice` before every password prompt (`Failed attempts: N of MAX`, using the configured limit). On the desktop, when the next wrong password would destroy the vault, the user must type `LAST`; Enter exits without using it. Mobile never destroys and always allows one try per start, so the right password works at the limit; wrong ones still count.
+- **Last attempt.** Both interfaces print `VAULT_FILES.attempts_notice` before every password prompt (`Failed attempts: N of MAX`, using the configured limit). In both interfaces, when the next wrong password would destroy the vault, the user must type `LAST`; Enter exits without using it. Mobile enforces the limit exactly as desktop does, including the self-destruct (it used to allow one checked try per start at the limit, which let restarts skip the limit). Maintainer may still choose a different mobile behaviour at the limit (for example a growing delay); until then it matches desktop.
 - **Auto-logout 0 means off** in every prompt helper.
 - **`config.cfg` untracked** (maintainer ruling, 2026-11-01): it is tied to the machine and salt. `config.example` documents its keys and defaults; `tests/test_config_example.py` keeps the two in step.
 - **KDF unchanged** (Argon2id 100 MiB, t=3, p=8, then PBKDF2): it is above both the OWASP minimum and Bitwarden's default.
@@ -307,7 +307,8 @@ The reviewer's own reproduction scripts were re-run against these commits:
 the crash case no longer destroys, and the timeout-0 case waits for input.
 Design choices made here (maintainer may revisit): wrong passwords are not
 counted while a change is interrupted; the destroying attempt needs a typed
-`LAST`; mobile allows one try per start at the limit.
+`LAST`; mobile allows one try per start at the limit (replaced 2026-11-27:
+mobile now enforces the limit as desktop does, see §4 "Last attempt").
 
 Not done: pushing (waits on the maintainer), the re-check by the reviewer,
 and the before-tag list in §7.

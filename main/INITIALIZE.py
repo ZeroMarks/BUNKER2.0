@@ -1266,7 +1266,7 @@ def main():
     """Main entry point"""
     check_terminal_size()
     clear_screen()
-    if not vaultSetup():
+    if not vaultSetup(setup_guide=display_setup_guide):
         print(nuke_art)
         print(nuke_text)
         print(divider)
@@ -1276,8 +1276,12 @@ if __name__ == "__main__":
     main()
 
 
-def display_setup_guide():
-    """Display a simplified user guide during setup phase"""
+def display_setup_guide(max_attempts=None):
+    """Display a simplified user guide during setup phase. The attempt limit
+    shown is the one a new vault starts with unless another is given."""
+    from main.VAULT_FILES import attempts_phrase
+    limit_master = attempts_phrase(max_attempts)
+    limit_plain = attempts_phrase(max_attempts, kind="password")
     clear_screen()
     print(title_art)
     print(subwm)
@@ -1289,13 +1293,13 @@ def display_setup_guide():
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker Setup Guide -----{RESET}\n\n"
-            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"{RESET}Our bunker-style approach is a burner vault: after {limit_master}, the application self-destructs and your saved data is permanently deleted. "
             f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
                 [
-                    f"{GOLD}• {CYAN}Self Destruct:{RESET} The application will self-destruct data after three incorrect password attempts.",
+                    f"{GOLD}• {CYAN}Self Destruct:{RESET} The application will self-destruct data after {limit_plain}.",
                     f"{GOLD}• {CYAN}Data Encryption:{RESET} All stored data is encrypted using industry-standard encryption algorithms.",
                     f"{GOLD}• {CYAN}Local Storage:{RESET} All data is stored locally on your PC, not in the cloud, ensuring maximum privacy.",
                     f"{GOLD}• {CYAN}Timeouts and Auto-Logout:{RESET} The application will automatically log out after a specified period of inactivity to prevent unauthorized access.\n\n",
@@ -1334,7 +1338,7 @@ def display_setup_guide():
                     f"{GOLD}• {RESET}You can cancel the setup at any time by typing {GOLD}.c{RESET} at password prompts.",
                     f"{GOLD}• {RESET}The auto-logout timer helps protect your data if you step away from your computer.",
                     f"{GOLD}• {RESET}After setup, you'll be able to store account information and secure notes.",
-                    f"{GOLD}• {RESET}The application will self-destruct all data after three incorrect password attempts.",
+                    f"{GOLD}• {RESET}The application will self-destruct all data after {limit_plain}.",
                     f"{GOLD}• {RESET}All data is stored locally on your device with strong encryption.",
                 ]
             )
@@ -1391,18 +1395,25 @@ def display_setup_guide():
 
 def display_user_guide(hashed_pass, db):
     """Display comprehensive user guide with enhanced security"""
+    from main.VAULT_FILES import attempts_phrase
+    try:
+        max_attempts = load_ui_config().get("max_attempts")
+    except Exception:
+        max_attempts = None  # the phrase falls back to the default limit
+    limit_master = attempts_phrase(max_attempts)
+    limit_plain = attempts_phrase(max_attempts, kind="password")
     sections = {
         "1": {
             "title": "Introduction",
             "color": RESET,
             "content": f"\n{GOLD}----- Welcome to the Bunker User Guide -----{RESET}\n\n"
-            f"{RESET}Our bunker-style approach is a burner vault: after three incorrect master password attempts, the application self-destructs and your saved data is permanently deleted. "
+            f"{RESET}Our bunker-style approach is a burner vault: after {limit_master}, the application self-destructs and your saved data is permanently deleted. "
             f"Errors, timeouts and closing the program never delete your data. Keep an encrypted export as a backup.{RESET}\n\n"
             f"{CYAN}All stored data is encrypted using industry-standard encryption algorithms and is kept on your own PC, ensuring your information is secure and private. {RESET}\n\n"
             + f"{GOLD}----- Security Features -----{RESET}\n\n"
             + "\n".join(
                 [
-                    f"{GOLD}• {CYAN}Self Destruct:{RESET} The application will self-destruct data after three incorrect password attempts.",
+                    f"{GOLD}• {CYAN}Self Destruct:{RESET} The application will self-destruct data after {limit_plain}.",
                     f"{GOLD}• {CYAN}Data Encryption:{RESET} All stored data is encrypted using industry-standard encryption algorithms.",
                     f"{GOLD}• {CYAN}Local Storage:{RESET} All data is stored locally on your PC, not in the cloud, ensuring maximum privacy.",
                     f"{GOLD}• {CYAN}Timeouts and Auto-Logout:{RESET} The application will automatically log out after a specified period of inactivity to prevent unauthorized access.\n\n",
@@ -1486,7 +1497,7 @@ def display_user_guide(hashed_pass, db):
                 f"\n{RESET}Welcome to {CYAN}ZEROMARKSLLC{RESET}, where we prioritize your security and privacy with cutting-edge technologies and thoughtful features. Trust and security are woven into every line of code. We empower you with a robust platform to manage your sensitive information confidently and privately.\n\n{RESET}"
                 + f"{LPURPLE}Fortified Encryption Protocols{RESET}: Your data is shielded by advanced encryption algorithms that meet industry standards, ensuring it remains confidential and unreadable to unauthorized access.\n"
                 + f"\n{LPURPLE}Zero Exposure to Cloud Risks{RESET}: We champion your privacy by storing all sensitive information strictly on your local device. This approach eliminates vulnerabilities associated with cloud-based storage.\n"
-                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: After three incorrect master password attempts, all stored data is permanently deleted. Nothing else triggers this.\n"
+                + f"\n{LPURPLE}Self-Defense Mechanisms{RESET}: After {limit_master}, all stored data is permanently deleted. Nothing else triggers this.\n"
                 + f"\n{LPURPLE}Innovative Password Management{RESET}: Enjoy hassle-free security with features like an auto-logout timer that activates after periods of inactivity and a robust password generator that crafts strong, unique passwords tailored to each account.\n"
                 + f"\n{LPURPLE}Secure Note Repository{RESET}: Store and manage important notes securely alongside passwords, ensuring easy access while maintaining the highest levels of data protection.\n"
                 + f"\n{LPURPLE}Continuous Vigilance{RESET}: We are committed to staying ahead of threats. Our team constantly updates our security protocols and application features to shield you from evolving cyber risks.\n\n"

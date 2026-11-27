@@ -1,7 +1,7 @@
 # BUNKER 2.0 — Maintainer handoff
 
 Notes for whoever picks up the v2.0 hardening work next. Read this first;
-you should not need anything else to start. Last updated 2026-11-20 (PT): generated secrets are copied, not printed (§13); judge pass (§12).
+you should not need anything else to start. Last updated 2026-11-27 (PT): IP display stop and setup warning (§14); generated secrets are copied, not printed (§13); judge pass (§12).
 
 **Next three moves:** (1) once the waiting commits are pushed, keep CI
 green on both PRs and merge `hardening/v2.0` into `mobile/shared-vault`
@@ -186,7 +186,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 ## 5. Open issues, risks, half-finished
 
-- **Network use** is limited to the optional public-IP features (IP display, off by default; System info after an explicit yes). Never describe BUNKER as making "no network calls"; say it works with the network off and makes no request unless asked to show the public IP. See `docs/THREAT_MODEL.md` §5.
+- **Network use** is limited to the optional public-IP features (IP display, off by default; System info after an explicit yes). Never describe BUNKER as making "no network calls"; say it works with the network off and makes no network connection unless you ask it to show your public IP (true and tested once §14 is merged). See `docs/THREAT_MODEL.md` §5.
 - **Multi-line note copies:** the clipboard fingerprint normalises line
   endings and trailing whitespace. A later copy by the user of the same
   text with different trailing whitespace would also be cleared. Low impact.
@@ -214,7 +214,7 @@ python3 BUNKER.py   # interactive; needs a real terminal
 
 **Before tagging v2.0** (from the independent review of #1; each is hours, not days):
 - Restore a root `README.md` and `LICENSE.txt`: the diff moves them, so the repo page would show neither. First step: decide with the maintainer which README goes at the root (§6.5).
-- Turning the IP display off must stop the background lookup thread (it keeps running and the message says "disabled"). First step: a `threading.Event` stop flag in the IP thread, plus a test that no lookup happens after disabling.
+- Done (§14): turning the IP display off stops the background lookup thread.
 - `docs/THREAT_MODEL.md` A3: most post-login prompts use a fixed 60 s auto-logout, not the configured value; say so (or pass the setting through).
 - `SECURITY.md` (prepared on `community/issue-templates`), private vulnerability reporting, SHA-256 checksums and a signed tag (`docs/RELEASE_CHECKLIST.md`).
 - Maintainer-only check of the demo data in early history (details kept privately).
@@ -322,10 +322,10 @@ The 14 waiting commits apply cleanly on `hardening/v2.0` and 142 tests pass (Lin
 - When merging, keep the interrupted-password-change handling in the mobile login (`finish_interrupted_change()` after a correct password), and keep #2's folder fsync in `SECURE_IO`.
 
 **Before tagging:**
-- `stop_ip_fetch_thread()` does not stop the thread (section 7); it also starts a second one on the next "on".
+- Done (§14): `stop_ip_fetch_thread()` did not stop the thread, and the next "on" started a second one.
 - Windows clipboard history and cloud clipboard keep copied secrets. First step: in `SECURE_IO`, set the registered formats `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory` = 0 and `CanUploadToCloudClipboard` = 0 alongside the text (as KeePassXC does).
 
-- Setup never warns that wrong passwords destroy the vault: `vaultSetup` doesn't mention the limit, its `.g` guide says "not implemented", and `display_setup_guide()` is never called. First step: one line before the password prompt, built from `max_attempts`, with Enter to acknowledge; build the guide's "three" from `max_attempts` too.
+- Done (§14): setup never warned that wrong passwords destroy the vault, and its `.g` guide said "not implemented".
 
 **Later:** mobile errors disappear after one second (wait for Enter instead); mobile edit or delete of an entry changed elsewhere gives a bare `KeyError` or a false "deleted"; a future format should store KDF parameters in a header and bind fields to their record with GCM associated data.
 
@@ -380,3 +380,28 @@ Copy first, show only on request, is the common rule.
 6. A generated passphrase pasted after the 30 s clear, or left at the
    prompt until auto-logout, is gone. The export must then be made again.
    Offering the passphrase before the file is written would close this.
+
+## 14. IP display stop and setup warning (2026-11-27, Pacific time)
+
+Two of the three before-tag items from §12. An independent review of the diff found a test that could not fail and imprecise mobile wording; both are fixed. 210 tests pass on Python 3.13.
+
+**IP display (`main/SHARED_RESOURCES.py`).**
+- The lookup thread waits on a `threading.Event` (`stop_event.wait(IP_REFRESH_SECONDS)`) instead of `time.sleep(30)`. `stop_ip_fetch_thread()` sets the event, so the thread wakes and exits; it re-checks the event between the connectivity check and the lookup, and before it stores a result.
+- `start_ip_fetch_thread()` holds a lock and treats a thread that was told to stop as not running, so off/on never leaves more than one thread looking up (a stopped thread may still be finishing its last call, and discards it).
+- The network calls now run outside `cache_lock`. Before, drawing the banner could wait up to about 15 seconds for a lookup.
+- Stop forgets the cached address; the banner shows "(checking...)" until the first answer instead of "None".
+- Limit: a lookup already under way when the display is turned off is not cancelled (the 8.8.8.8 check has a 5 s timeout, `curl` 10 s). Its result is discarded. Cancelling it would mean running `curl` with `Popen` and killing it on stop.
+- Tests: `tests/test_ip_display_thread.py` (counters stand in for the network), `tests/test_offline_by_default.py` (setup and desktop login with every network call blocked, real banner).
+
+**Setup warning (`vaultSetup` in `main/SHARED_RESOURCES_MOBILE.py`).**
+- After "y" at the first prompt and before the show-password question, setup prints `VAULT_FILES.self_destruct_warning()` and waits: Enter continues, `.c` cancels with nothing written, anything else asks again.
+- `vaultSetup(setup_guide=None, destroys=True)`: the desktop passes `display_setup_guide`; a phone or tablet gets `setup_guide_short()` and the mobile sentence (that interface never deletes; the desktop does).
+- The number comes from `VAULT_FILES.DEFAULT_MAX_ATTEMPTS`, the same constant setup writes to `config.cfg`. The in-app user guide reads `max_attempts` from `config.cfg`. `attempt_limit()` falls back to the default for anything that is not a whole number of at least 1.
+- Tests: `tests/test_setup_warning.py`, including a scan that no module in `main/` hard-codes "three incorrect" again.
+- Walked by hand in a pseudo-terminal with `NO_COLOR=1 BUNKER_NO_EMOJI=1`: desktop (`.g`, a section, `.c`, the warning, cancel) and mobile (warning, a refused answer, full setup to the login screen).
+
+**Not done:**
+1. `max_attempts` cannot be changed from inside BUNKER, and the other places that create a default `config.cfg` (`load_ui_config`, `MOBILE.py`) still write a literal 3. First step: use `DEFAULT_MAX_ATTEMPTS` there too.
+2. Login now reads the limit through `attempt_limit()` too, so a broken `max_attempts` in `config.cfg` cannot make the guides and the login disagree.
+3. The mobile sentence is long for a narrow screen. Shorten it only with wording that stays true for attempts made on both interfaces.
+4. Windows clipboard history (§12) is the remaining before-tag item.

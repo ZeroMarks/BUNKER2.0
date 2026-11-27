@@ -75,14 +75,20 @@ concern for AES-GCM.
 - **Vault data never leaves the machine.** BUNKER makes no network request
   unless you ask it to look up your public IP, in one of two places:
   - the IP display (off by default): once turned on, it checks connectivity
-    against 8.8.8.8 and asks api64.ipify.org every 30 seconds;
+    against 8.8.8.8 and asks api64.ipify.org every 30 seconds, until you
+    turn it off or close BUNKER. Turning it off ends the lookups; one
+    already under way (about 15 seconds at most) finishes and its answer
+    is discarded;
   - the System info screen: only after you answer yes to "Look up your
     public IP online?" (api.ipify.org, falling back to ifconfig.me and
     icanhazip.com).
 
   Those services see your IP address and when you asked. Nothing from the
   vault is sent. `tests/test_system_info_network.py` checks that every other
-  answer on the System info screen leaves the network untouched.
+  answer on the System info screen leaves the network untouched,
+  `tests/test_ip_display_thread.py` that no lookup follows turning the
+  display off, and `tests/test_offline_by_default.py` that a new vault is
+  created and opened with every network call blocked.
 
 ## 6. Known limits (residual risk)
 

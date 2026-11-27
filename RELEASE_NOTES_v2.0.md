@@ -37,7 +37,11 @@ a known limitation, it says so.
 - **Plain output option.** Set `NO_COLOR=1` to run without colours
   ([NO_COLOR](https://no-color.org) convention), useful with screen readers
   and when logging.
-- **Optional public-IP display** and a network information screen.
+- **Optional public-IP display** (off by default) and a network information
+  screen. BUNKER makes no network connection unless you ask it to show your
+  public IP in one of these two places.
+- **Setup guide.** Type `.g` at the first setup prompt. On the desktop it
+  opens the setup guide; on a phone or tablet it prints a short one.
 
 ## Security fixes in this release
 
@@ -73,6 +77,20 @@ a known limitation, it says so.
   you declined to see network details. It now does so only after you answer
   yes to "Look up your public IP online?"; the local IP is read from your
   network interfaces without any request.
+- **Turning the IP display off stops the lookups.** With the public IP
+  display on, BUNKER checks connectivity and asks api64.ipify.org for your
+  address every 30 seconds. Turning it off used to change only what was
+  shown: the lookups went on until you closed BUNKER, and each time you
+  turned the display back on another set started beside the old one. Off
+  now ends them. A lookup already under way (about 15 seconds at most) is
+  allowed to finish and its answer is thrown away.
+- **Setup warns you about self-destruct.** Until now a new user first
+  learned that wrong master passwords delete the vault at the login screen,
+  after the vault existed. Setup now says it before it asks for a password
+  ("After 3 wrong master passwords in a row, this vault is permanently
+  deleted. Keep an encrypted export as a backup.") and waits for Enter;
+  `.c` cancels. The number in that sentence and in the guides comes from
+  the vault's attempt limit.
 - **Imports check the file first.** Importing notes while the vault was
   not loaded used to replace the whole vault with just the imported notes;
   it now refuses. Every export file is checked before anything is saved:
@@ -164,7 +182,9 @@ The tests cover the first-run flow end to end with real encryption, the
 self-destruct policy, clipboard clearing (timer, outages, terminal close),
 generated secrets being copied instead of printed,
 safe error text, atomic and owner-only file writes, plain output, that the
-System info screen stays offline unless you ask for your public IP, and a
+System info screen stays offline unless you ask for your public IP, that a
+new vault is created and opened with every network call blocked, that
+turning the IP display off ends the lookups, the setup warning, and a
 fuzz test of damaged vault files. CI runs them on Linux, macOS and Windows
 with Python 3.10-3.13, plus a dependency audit. Most interactive menus are
 not covered by automated tests.

@@ -728,9 +728,43 @@ def verify_setup(vault: SecureVaultEnhanced, password: str, salt: bytes, verifie
         print(f"{RED}** ALERT: Verification failed: {safe_error(e)} **{RESET}")
         return False
         
-def vaultSetup():
-    """Setup vault with enhanced security"""
-    from main.VAULT_FILES import setup_allowed, write_new_vault
+def setup_guide_short(destroys=True):
+    """A plain, narrow setup guide for interfaces without the full one."""
+    from main.VAULT_FILES import self_destruct_warning
+    print(f"\n{CYAN}SETUP GUIDE{RESET}")
+    for line in (
+        self_destruct_warning(destroys=destroys),
+        "Closing BUNKER does not reset the count; only a correct password does.",
+        "Your master password cannot be recovered if you forget it.",
+        "Choose a master password of at least 8 characters; a long passphrase is best.",
+        "Type .c at a password prompt to cancel setup.",
+        "Auto-logout: 10-3600 seconds without input, or 0 for no auto-logout.",
+        "Everything is stored encrypted in this folder, on this device only.",
+    ):
+        print(f"{GOLD}- {RESET}{line}")
+
+
+def acknowledge_self_destruct(destroys=True):
+    """Show the self-destruct warning and wait for Enter. Returns False if
+    the user cancels with .c. Shown before the first password prompt: the
+    vault's most destructive behaviour has to be known before it exists."""
+    from main.VAULT_FILES import self_destruct_warning
+    print(f"\n{RED}WARNING: {self_destruct_warning(destroys=destroys)}{RESET}")
+    while True:
+        answer = input(f"{GOLD}Press Enter to acknowledge, or type .c to cancel: {RESET}").strip().lower()
+        if answer == "":
+            return True
+        if answer == ".c":
+            return False
+        print(f"{RED}** ALERT: Press Enter on an empty line to continue, or type .c to cancel. **{RESET}")
+
+
+def vaultSetup(setup_guide=None, destroys=True):
+    """Create a new vault. ``setup_guide`` is what the (.g) option shows
+    (the desktop passes its full guide; without one a short guide is
+    printed). ``destroys`` is False on the mobile interface, which never
+    deletes the vault, so the warning says who does."""
+    from main.VAULT_FILES import setup_allowed, write_new_vault, DEFAULT_MAX_ATTEMPTS
     if not setup_allowed():
         # Never create a new vault over an existing one: that replaces the
         # salt and makes the existing vault impossible to open.
@@ -751,11 +785,18 @@ def vaultSetup():
                 print(f"{GREEN}Operation cancelled...{RESET}")
                 return False
             elif setup_choice == '.g':
-                print(f"{CYAN}Setup Guide not implemented in mobile view{RESET}")
+                if setup_guide is not None:
+                    setup_guide()
+                else:
+                    setup_guide_short(destroys)
                 continue
             else:
                 print(f"{RED}** ALERT: Invalid input. Please enter y, n, or .g. **{RESET}")
                 continue
+
+        if not acknowledge_self_destruct(destroys):
+            print(f"{GREEN}Operation cancelled...{RESET}")
+            return False
 
         while True:
             show_password_choice = input(f"{GOLD}Do you want to show your password? (y/n) or (.c) to cancel: {RESET}").lower()
@@ -818,7 +859,7 @@ def vaultSetup():
             # Create initial UI config
             ui_config = {
                 "attempts": 0,
-                "max_attempts": 3,
+                "max_attempts": DEFAULT_MAX_ATTEMPTS,
                 "disable_ipv4": True,
                 "current_timeout": timeout_value
             }
